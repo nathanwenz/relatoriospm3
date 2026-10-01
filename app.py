@@ -24,7 +24,7 @@ from reportlab.lib.units import inch
 # =========================================================
 # CONFIGURAÇÃO DA PÁGINA E TEMA (CSS)
 # =========================================================
-st.set_page_config(page_title="18º BPM — Gerador de Relatórios", page_icon="🛡️", layout="centered")
+st.set_page_config(page_title="18º BPM — Gerador de Relatórios", page_icon="🛡️️", layout="centered")
 
 SENHA_CORRETA = "deusa"
 
@@ -200,7 +200,6 @@ def formatar_data_curta(val):
     if not val_str or val_str.lower() in ['none', 'nan', '', 'null']:
         return "23/09/2026"
 
-    # Se já estiver no formato numérico
     m = re.search(r'\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\b', val_str)
     if m:
         dia, mes, ano = m.group(1).zfill(2), m.group(2).zfill(2), m.group(3)
@@ -208,7 +207,6 @@ def formatar_data_curta(val):
             ano = f"20{ano}"
         return f"{dia}/{mes}/{ano}"
 
-    # Se estiver por extenso ex: "23 de setembro de 2026 (quarta-feira)"
     m_ext = re.search(r'(\d{1,2})\s+de\s+([a-zç]+)\s+de\s+(\d{4})', val_str, re.IGNORECASE)
     if m_ext:
         dia = m_ext.group(1).zfill(2)
@@ -453,7 +451,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
     for group_idx, item in enumerate(grupos_iterator):
         if group_cols:
             chaves, grupo = item
-            primeiro = grupo.iloc
+            primeiro = grupo.iloc[0]
         else:
             _, row = item
             primeiro = row
@@ -582,7 +580,7 @@ def render_extrajornada():
             _, _, _, col_d, _ = processar_dataframe(df)
             data_sugerida_tela = "23 de setembro de 2026 (quarta-feira)"
             if col_d and col_d in df.columns and not df[col_d].dropna().empty:
-                primeira_data_val = df[col_d].dropna().iloc
+                primeira_data_val = df[col_d].dropna().iloc[0]
                 data_sugerida_tela = formatar_data_extenso(primeira_data_val)
 
             data_cabecalho = st.text_input("Data para o cabeçalho do relatório", value=data_sugerida_tela)
