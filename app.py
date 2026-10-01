@@ -154,6 +154,21 @@ DIAS_SEMANA = { 0: "segunda-feira", 1: "terça-feira", 2: "quarta-feira", 3: "qu
 MESES = { 1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril", 5: "maio", 6: "junho", 7: "julho", 8: "agosto", 9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro" }
 MESES_REV = { "janeiro": 1, "fevereiro": 2, "março": 3, "abril": 4, "maio": 5, "junho": 6, "julho": 7, "agosto": 8, "setembro": 9, "outubro": 10, "novembro": 11, "dezembro": 12 }
 
+def deduplicate_headers(headers):
+    seen = {}
+    new_headers = []
+    for h in headers:
+        h_clean = str(h).replace('\n', ' ').strip()
+        if not h_clean:
+            h_clean = "COL"
+        if h_clean in seen:
+            seen[h_clean] += 1
+            new_headers.append(f"{h_clean}_{seen[h_clean]}")
+        else:
+            seen[h_clean] = 0
+            new_headers.append(h_clean)
+    return new_headers
+
 def formatar_data_extenso(val):
     """Converte qualquer data para 'xx de mês de ano (dia-da-semana)' para uso no cabeçalho do relatório."""
     if val is None or pd.isna(val):
@@ -173,7 +188,7 @@ def formatar_data_extenso(val):
     if " de " in val_str.lower() and ("feira" in val_str.lower() or "sábado" in val_str.lower() or "domingo" in val_str.lower()):
         return val_str
 
-    s_clean = val_str.split()[0] if val_str.split() else val_str
+    s_clean = val_str.split() if val_str.split() else val_str
     
     for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%Y/%m/%d"]:
         try:
@@ -216,7 +231,7 @@ def formatar_data_curta(val):
             mes_num = str(MESES_REV[mes_nome]).zfill(2)
             return f"{dia}/{mes_num}/{ano}"
 
-    s_clean = val_str.split()[0] if val_str.split() else val_str
+    s_clean = val_str.split() if val_str.split() else val_str
     for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%Y/%m/%d"]:
         try:
             dt = datetime.strptime(s_clean, fmt)
@@ -235,58 +250,46 @@ def std_time(t):
         return f"{h}:{m}"
     if ':' in t:
         parts = t.split(':')
-        return f"{parts[0].zfill(2)}:{parts[1].zfill(2)}"
+        return f"{parts.zfill(2)}:{parts[2].zfill(2)}"
     if len(t) == 4 and t.isdigit():
         return f"{t[:2]}:{t[2:]}"
     if len(t) <= 2 and t.isdigit():
         return f"{t.zfill(2)}:00"
     return t
 
-def formatar_horario(primeiro, col_h=None, col_ini=None, col_fim=None, col_v=None, col_c=None, col_d=None):
-    """Extrai com precisão os horários de início e término da escala, mesmo que estejam em colunas separadas."""
-    hora_raw = ""
-    if col_ini and col_fim:
-        v_i = str(primeiro.get(col_ini, "")).strip() if col_ini in primeiro else ""
-        v_f = str(primeiro.get(col_fim, "")).strip() if col_fim in primeiro else ""
-        if v_i and v_f and v_i.lower() not in ['none', 'nan'] and v_f.lower() not in ['none', 'nan']:
-            hora_raw = f"{v_i} às {v_f}"
-        elif v_i and v_i.lower() not in ['none', 'nan']:
-            hora_raw = v_i
+termos_policial = ["NOME", "POLICIAL", "EFETIVO", "GRADUACAO", "POSTO", "GRAD", "PM", "MILITAR", "INTEGRANTE", "RG", "CPF", "MATRICULA", "CONTATO", "TELEFONE", "RESPONSAVEL", "SERVIDOR"]
 
-    if not hora_raw and col_h and col_h in primeiro:
-        hora_raw = str(primeiro.get(col_h, "")).strip()
-        if col_fim and col_fim in primeiro:
-            v_f = str(primeiro.get(col_fim, "")).strip()
-            if v_f and v_f.lower() not in ['none', 'nan'] and v_f not in hora_raw:
-                hora_raw = f"{hora_raw} às {v_f}"
+def e_coluna_policial(col_nome):
+    col_norm = re.sub(r'[ÁÀÂÃ]', 'A', re.sub(r'[ÉÈÊ]', 'E', re.sub(r'[ÍÌÎ]', 'I', re.sub(r'[ÓÒÔÕ]', 'O', re.sub(r'[ÚÙÛ]', 'U', str(col_nome).upper())))))
+    return any(tp in col_norm for tp in termos_policial)
 
-    if not hora_raw or hora_raw.lower() in ['none', 'nan', '', 'null']:
-        hora_raw = ""
-
-    s = re.sub(r'\b\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4}\b', '', hora_raw)
-    s = re.sub(r'(\d{1,2}:\d{2})[a-zA-Z]+', r'\1', s)
-    s_clean = re.sub(r'\b(minutos|min|mins|horas|hora|hrs|hs|m)\b', '', s, flags=re.IGNORECASE)
-    raw_tokens = re.findall(r'(\d{1,2}:\d{2}|\d{1,2}[hH]\d{2}|\d{1,2}[hH]|\b\d{4}\b|\b\d{1,2}\b)', s_clean)
-
+def formatar_horario(primeiro, time_cols=None, col_v=None, col_c=None, col_d=None):
     valid_times = []
-    for t in raw_tokens:
-        t_str = t.strip()
-        if not t_str: continue
-        if len(t_str) == 4 and t_str.isdigit():
-            val = int(t_str)
-            if 2020 <= val <= 2030: continue
-            if val > 2400 or int(t_str[2:]) > 59: continue
-        elif ':' in t_str:
-            parts = t_str.split(':')
-            if int(parts[0]) > 24 or int(parts[1]) > 59: continue
-        elif len(t_str) <= 2 and t_str.isdigit():
-            if int(t_str) > 24: continue
-        valid_times.append(t_str)
+    
+    if time_cols:
+        for col in time_cols:
+            val = str(primeiro.get(col, "")).strip()
+            if not val or val.lower() in ['none', 'nan']:
+                continue
+            val_nodate = re.sub(r'\b\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4}\b', '', val)
+            val_clean = re.sub(r'\b(minutos|min|mins|horas|hora|hrs|hs|m)\b', '', val_nodate, flags=re.IGNORECASE)
+            tokens = re.findall(r'(\d{1,2}:\d{2}|\d{1,2}[hH]\d{2}|\d{1,2}[hH]|\b\d{4}\b|\b\d{1,2}\b)', val_clean)
+            for t in tokens:
+                t_str = t.strip()
+                if not t_str: continue
+                if len(t_str) == 4 and t_str.isdigit():
+                    val_num = int(t_str)
+                    if 2020 <= val_num <= 2030 or val_num > 2400 or int(t_str[2:]) > 59: continue
+                elif ':' in t_str:
+                    parts = t_str.split(':')
+                    if int(parts) > 24 or int(parts[2]) > 59: continue
+                elif len(t_str) <= 2 and t_str.isdigit():
+                    if int(t_str) > 24: continue
+                valid_times.append(std_time(t_str))
 
-    # Se encontramos menos de 2 horários, varrer todas as colunas operacionais da linha em busca do 2º horário
     if len(valid_times) < 2:
         for col_name, col_val in primeiro.items():
-            if col_name in [col_v, col_c, col_d]:
+            if col_name in [col_v, col_c, col_d] or (time_cols and col_name in time_cols):
                 continue
             if e_coluna_policial(col_name):
                 continue
@@ -294,37 +297,34 @@ def formatar_horario(primeiro, col_h=None, col_ini=None, col_fim=None, col_v=Non
             if not val_str or val_str.lower() in ['none', 'nan']:
                 continue
             val_str_nodate = re.sub(r'\b\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4}\b', '', val_str)
-            tokens_extra = re.findall(r'(\d{1,2}:\d{2}|\d{1,2}[hH]\d{2}|\d{1,2}[hH]|\b\d{4}\b|\b\d{1,2}\b)', val_str_nodate)
+            val_clean = re.sub(r'\b(minutos|min|mins|horas|hora|hrs|hs|m)\b', '', val_str_nodate, flags=re.IGNORECASE)
+            tokens_extra = re.findall(r'(\d{1,2}:\d{2}|\d{1,2}[hH]\d{2}|\d{1,2}[hH]|\b\d{4}\b|\b\d{1,2}\b)', val_clean)
             for te in tokens_extra:
                 te_str = te.strip()
+                if not te_str: continue
                 if len(te_str) == 4 and te_str.isdigit():
                     val = int(te_str)
-                    if 2020 <= val <= 2030 or val > 2400 or int(te_str[2:]) > 59:
-                        continue
+                    if 2020 <= val <= 2030 or val > 2400 or int(te_str[2:]) > 59: continue
                 elif ':' in te_str:
                     parts = te_str.split(':')
-                    if int(parts[0]) > 24 or int(parts[1]) > 59:
-                        continue
+                    if int(parts) > 24 or int(parts[2]) > 59: continue
                 elif len(te_str) <= 2 and te_str.isdigit():
-                    if int(te_str) > 24:
-                        continue
+                    if int(te_str) > 24: continue
                 
-                if not valid_times or std_time(te_str) != std_time(valid_times[0]):
-                    valid_times.append(te_str)
+                t_formatted = std_time(te_str)
+                if not valid_times or t_formatted != valid_times:
+                    valid_times.append(t_formatted)
                 if len(valid_times) >= 2:
                     break
             if len(valid_times) >= 2:
                 break
 
     if len(valid_times) >= 2:
-        h1 = std_time(valid_times[0])
-        h2 = std_time(valid_times[1])
-        return f"Das {h1} às {h2}"
+        return f"Das {valid_times} às {valid_times[2]}"
     elif len(valid_times) == 1:
-        h1 = std_time(valid_times[0])
-        return f"Das {h1} às 23:59"
-        
-    return "Das 18:00 às 23:59"
+        return f"Das {valid_times} às 23:59"
+    else:
+        return "Das 18:00 às 23:59"
 
 def verificar_cidade_segura(file_bytes, ext, df):
     if ext == "pdf" and file_bytes is not None:
@@ -389,10 +389,10 @@ def ler_arquivo_pdf(file_bytes):
             break
 
     if header_idx == -1:
-        headers = [f"COL_{i}" for i in range(len(data))] if data else []
+        raw_headers = [f"COL_{i}" for i in range(len(data))] if data else []
         rows = data
     else:
-        headers = [str(h).strip() if str(h).strip() else f"COL_{i}" for i, h in enumerate(data[header_idx])]
+        raw_headers = [str(h).strip() if str(h).strip() else f"COL_{i}" for i, h in enumerate(data[header_idx])]
         rows = data[header_idx + 1:]
 
     rows_filtradas = []
@@ -406,23 +406,14 @@ def ler_arquivo_pdf(file_bytes):
             continue
         rows_filtradas.append(row)
 
+    headers = deduplicate_headers(raw_headers)
     return pd.DataFrame(rows_filtradas, columns=headers)
-
-def normalizar_texto(txt):
-    txt = str(txt).upper()
-    return re.sub(r'[ÁÀÂÃ]', 'A', re.sub(r'[ÉÈÊ]', 'E', re.sub(r'[ÍÌÎ]', 'I', re.sub(r'[ÓÒÔÕ]', 'O', re.sub(r'[ÚÙÛ]', 'U', txt)))))
-
-termos_policial = ["NOME", "POLICIAL", "EFETIVO", "GRADUACAO", "POSTO", "GRAD", "PM", "MILITAR", "INTEGRANTE", "RG", "CPF", "MATRICULA", "CONTATO", "TELEFONE", "RESPONSAVEL", "SERVIDOR"]
-
-def e_coluna_policial(col_nome):
-    col_norm = normalizar_texto(col_nome)
-    return any(tp in col_norm for tp in termos_policial)
 
 def encontrar_coluna_por_nome(termos, df_cols, ignorar_policial=False):
     for termo in termos:
-        termo_norm = normalizar_texto(termo)
+        termo_norm = re.sub(r'[ÁÀÂÃ]', 'A', re.sub(r'[ÉÈÊ]', 'E', re.sub(r'[ÍÌÎ]', 'I', re.sub(r'[ÓÒÔÕ]', 'O', re.sub(r'[ÚÙÛ]', 'U', termo.upper())))))
         for col_upper, col_orig in df_cols.items():
-            col_norm = normalizar_texto(col_upper)
+            col_norm = re.sub(r'[ÁÀÂÃ]', 'A', re.sub(r'[ÉÈÊ]', 'E', re.sub(r'[ÍÌÎ]', 'I', re.sub(r'[ÓÒÔÕ]', 'O', re.sub(r'[ÚÙÛ]', 'U', col_upper.upper())))))
             if ignorar_policial and e_coluna_policial(col_orig):
                 continue
             if termo_norm in col_norm:
@@ -431,33 +422,34 @@ def encontrar_coluna_por_nome(termos, df_cols, ignorar_policial=False):
 
 def processar_dataframe(df):
     if df is None or df.empty:
-        return df, None, None, None, None, None, None
+        return df, None, None, None, None, []
 
+    df.columns = deduplicate_headers(list(df.columns))
     cols = {str(c).upper().strip(): c for c in df.columns}
 
     col_volcher = encontrar_coluna_por_nome(["VOLCHER", "VOUCHER", "VOLCHE", "VOUCHE", "N°", "Nº", "NUMERO", "NRO", "CODIGO", "CARTAO"], cols)
     col_cidade = encontrar_coluna_por_nome(["CIDADE", "MUNICÍPIO", "MUNICIPIO", "LOCAL", "OPM", "MUNIC", "LOTAÇÃO", "POSTO"], cols)
     col_data = encontrar_coluna_por_nome(["DATA", "DIA", "PERIODO"], cols, ignorar_policial=True)
 
-    col_inicio = encontrar_coluna_por_nome(["HORA INICIO", "HORA INICIAL", "INICIO", "INICIAL", "ENTRADA", "DESDE"], cols, ignorar_policial=True)
-    col_fim = encontrar_coluna_por_nome(["HORA FIM", "HORA TERMINO", "TERMINO", "FIM", "FINAL", "SAIDA", "ATE"], cols, ignorar_policial=True)
-    col_hora = encontrar_coluna_por_nome(["HORA", "HORARIO", "TURNO", "PERIODO", "ESCALA", "SERVICO", "TEMPO"], cols, ignorar_policial=True)
+    time_cols = []
+    for col in df.columns:
+        if e_coluna_policial(col):
+            continue
+        if col in [col_volcher, col_cidade, col_data]:
+            continue
+            
+        sample_vals = [str(v) for v in df[col].dropna().head(10).tolist()]
+        sample_text = " ".join(sample_vals)
+        col_upper = str(col).upper()
+        
+        if ("HORA" in col_upper or "HORARIO" in col_upper or "TURNO" in col_upper or "ESCALA" in col_upper or
+            "INICIO" in col_upper or "TERMINO" in col_upper or "FIM" in col_upper or "ENTRADA" in col_upper or "SAIDA" in col_upper or
+            re.search(r'\b\d{1,2}:\d{2}\b', sample_text) or re.search(r'\b\d{1,2}[hH]\d{2}\b', sample_text)):
+            time_cols.append(col)
 
-    if col_inicio and col_fim and col_inicio == col_fim:
-        col_fim = None
+    col_hora = time_cols if time_cols else None
 
-    if col_inicio and col_hora and col_inicio == col_hora and not col_fim:
-        for col_upper, col_orig in cols.items():
-            if col_orig in [col_volcher, col_cidade, col_data, col_inicio]:
-                continue
-            if e_coluna_policial(col_orig):
-                continue
-            col_norm = normalizar_texto(col_upper)
-            if any(term in col_norm for term in ["TERMINO", "FIM", "FINAL", "SAIDA", "ATE"]):
-                col_fim = col_orig
-                break
-
-    return df, col_volcher, col_cidade, col_data, col_hora, col_inicio, col_fim
+    return df, col_volcher, col_cidade, col_data, col_hora, time_cols
 
 def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta-feira)", e_cidade_segura=False):
     doc = Document()
@@ -507,13 +499,13 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
     r_obs.font.size = Pt(9.5)
     r_obs.font.name = "Arial"
 
-    df, col_v, col_c, col_d, col_h, col_ini, col_fim = processar_dataframe(df_escala)
+    df, col_v, col_c, col_d, col_h, time_cols = processar_dataframe(df_escala)
 
-    for c in [col_v, col_c, col_d, col_h, col_ini, col_fim]:
+    for c in [col_v, col_c, col_d] + time_cols:
         if c and c in df.columns:
             df[c] = df[c].astype(str).str.strip()
 
-    group_cols = [c for c in [col_v, col_c, col_d, col_h, col_ini, col_fim] if c is not None and c in df.columns]
+    group_cols = [c for c in ([col_v, col_c, col_d] + time_cols) if c is not None and c in df.columns]
 
     if group_cols:
         grupos_iterator = df.groupby(group_cols, sort=False)
@@ -523,7 +515,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
     for group_idx, item in enumerate(grupos_iterator):
         if group_cols:
             chaves, grupo = item
-            primeiro = grupo.iloc[0]
+            primeiro = grupo.iloc
         else:
             _, row = item
             primeiro = row
@@ -536,7 +528,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         data_raw = str(primeiro.get(col_d, "")).strip() if col_d else ""
         data_str = formatar_data_curta(data_raw) if data_raw else formatar_data_curta(data_cabecalho_formatada)
 
-        hora_str = formatar_horario(primeiro, col_h=col_h, col_ini=col_ini, col_fim=col_fim, col_v=col_v, col_c=col_c, col_d=col_d)
+        hora_str = formatar_horario(primeiro, time_cols=time_cols, col_v=col_v, col_c=col_c, col_d=col_d)
 
         table = doc.add_table(rows=5, cols=2)
         table.style = 'Table Grid'
@@ -544,8 +536,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         table.autofit = False
 
         for row in table.rows:
-            row.cells[0].width = Inches(2.0)
-            row.cells[1].width = Inches(4.5)
+            row.cells.width = Inches(2.0)
+            row.cells[2].width = Inches(4.5)
 
         campos = [
             ("CIDADE/VOLCHER", f"{cidade_val} - VOLCHER - {volcher_val}"),
@@ -557,8 +549,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         for i, (label, val) in enumerate(campos):
             r = table.rows[i]
 
-            c0 = r.cells[0]
-            p0 = c0.paragraphs[0]
+            c0 = r.cells
+            p0 = c0.paragraphs
             p0.paragraph_format.space_after = Pt(2)
             p0.paragraph_format.space_before = Pt(2)
             r0 = p0.add_run(label)
@@ -567,8 +559,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             r0.font.size = Pt(10)
             set_cell_background(c0, "D9E1F2")
 
-            c1 = r.cells[1]
-            p1 = c1.paragraphs[0]
+            c1 = r.cells[2]
+            p1 = c1.paragraphs
             p1.paragraph_format.space_after = Pt(2)
             p1.paragraph_format.space_before = Pt(2)
             r1 = p1.add_run(val)
@@ -577,11 +569,11 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             r1.font.size = Pt(10)
             set_cell_background(c1, "FFFFFF")
 
-        r4 = table.rows[4]
-        c0 = r4.cells[0]
-        c1 = r4.cells[1]
+        r4 = table.rows[3]
+        c0 = r4.cells
+        c1 = r4.cells[2]
         c0.merge(c1)
-        p_obs_tbl = c0.paragraphs[0]
+        p_obs_tbl = c0.paragraphs
         p_obs_tbl.paragraph_format.space_after = Pt(3)
         p_obs_tbl.paragraph_format.space_before = Pt(3)
         p_obs_tbl.paragraph_format.line_spacing = 1.15
@@ -647,10 +639,10 @@ def render_extrajornada():
             if e_cidade_segura:
                 st.info("ℹ️ Operação 'CIDADE SEGURA' identificada no arquivo. O cabeçalho do relatório incluirá este destaque.")
 
-            _, _, _, col_d, _, _, _ = processar_dataframe(df)
+            _, _, _, col_d, _, _ = processar_dataframe(df)
             data_sugerida_tela = "23 de setembro de 2026 (quarta-feira)"
             if col_d and col_d in df.columns and not df[col_d].dropna().empty:
-                primeira_data_val = df[col_d].dropna().iloc[0]
+                primeira_data_val = df[col_d].dropna().iloc
                 data_sugerida_tela = formatar_data_extenso(primeira_data_val)
 
             data_cabecalho = st.text_input("Data para o cabeçalho do relatório", value=data_sugerida_tela)
@@ -1016,7 +1008,7 @@ def parsear_ordem_operacao(texto):
         p = normalizar_subnumeracao_secao(p, 7)
         dados['prescricoes'] = p
     else:
-        dados['prescricoes'] = "Os policiais militares deverão atuar com bom senso, urbanidade, legalidade e estrito cumprimento do dever legal. Preleção obrigatória antes do início do serviço."
+        dados['prescricoes'] = "Os policiais militares deverão atuar com bom senso, urbanidade, legalidade e estrito cumprimento do dever legal. Preleção obrigatoria antes do início do serviço."
 
     ref = extrair_secao_flexivel(texto, r'REFERÊNCIAS', [r'DISTRIBUIÇÃO', r'$'])
     if ref and len(ref.strip()) > 10:
@@ -1061,7 +1053,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
+                if len(cels) > 1 and cels == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
@@ -1096,7 +1088,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
                         for c_idx, cell_value in enumerate(row_data):
                             if c_idx < len(row_cells):
                                 cell = row_cells[c_idx]
-                                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+                                p = cell.paragraphs if cell.paragraphs else cell.add_paragraph()
                                 p.paragraph_format.space_before = Pt(3)
                                 p.paragraph_format.space_after = Pt(3)
                                 p.paragraph_format.line_spacing = 1.15
@@ -1164,14 +1156,14 @@ def gerar_ordem_servico_docx(fields):
     table_hdr.autofit = False
     table_hdr.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    row0 = table_hdr.rows[0]
-    cell_left = row0.cells[0]
-    cell_right = row0.cells[1]
+    row0 = table_hdr.rows
+    cell_left = row0.cells
+    cell_right = row0.cells[2]
 
     cell_left.width = Inches(3.5)
     cell_right.width = Inches(3.0)
 
-    p_left = cell_left.paragraphs[0]
+    p_left = cell_left.paragraphs
     p_left.paragraph_format.space_after = Pt(2)
     p_left.paragraph_format.line_spacing = 1.2
     r_l = p_left.add_run("PMPR\n2º CRPM/18º BPM\nP/3")
@@ -1179,7 +1171,7 @@ def gerar_ordem_servico_docx(fields):
     r_l.font.name = "Arial"
     r_l.font.size = Pt(10)
 
-    p_right = cell_right.paragraphs[0]
+    p_right = cell_right.paragraphs
     p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_right.paragraph_format.space_after = Pt(2)
     p_right.paragraph_format.line_spacing = 1.2
@@ -1272,7 +1264,7 @@ def renderizar_conteudo_pdf(story, conteudo, style_subnum, style_body, style_tab
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
+                if len(cels) > 1 and cels == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
