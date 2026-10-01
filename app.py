@@ -226,61 +226,96 @@ def formatar_data_curta(val):
             
     return val_str
 
-def formatar_horario(hora_raw):
-    """Extrai com precisão o intervalo de horário (ex: 'Das 18:00 às 02:00'), preservando fielmente o horário de término do PDF/escala."""
-    if not hora_raw or str(hora_raw).strip().lower() in ['none', 'nan', '', 'null']:
-        return "Das 18:00 às 23:59"
-    
-    s = str(hora_raw).strip()
-    
-    # 1. Remover datas (ex: 23/09/2026, 2026-09-23) para não confundir dia/mês/ano com horário
-    s = re.sub(r'\b\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4}\b', '', s)
-    
-    # 2. Se houver horários no formato 18:00HS ou 18:00H, remover as letras coladas após o ':'
+def std_time(t):
+    t = str(t).strip()
+    m_h = re.match(r'^(\d{1,2})[hH](\d{2})?$', t)
+    if m_h:
+        h = m_h.group(1).zfill(2)
+        m = m_h.group(2) if m_h.group(2) else "00"
+        return f"{h}:{m}"
+    if ':' in t:
+        parts = t.split(':')
+        return f"{parts[0].zfill(2)}:{parts[1].zfill(2)}"
+    if len(t) == 4 and t.isdigit():
+        return f"{t[:2]}:{t[2:]}"
+    if len(t) <= 2 and t.isdigit():
+        return f"{t.zfill(2)}:00"
+    return t
+
+def formatar_horario(primeiro, col_h=None, col_ini=None, col_fim=None, col_v=None, col_c=None, col_d=None):
+    """Extrai com precisão os horários de início e término da escala, mesmo que estejam em colunas separadas."""
+    hora_raw = ""
+    if col_ini and col_fim:
+        v_i = str(primeiro.get(col_ini, "")).strip() if col_ini in primeiro else ""
+        v_f = str(primeiro.get(col_fim, "")).strip() if col_fim in primeiro else ""
+        if v_i and v_f and v_i.lower() not in ['none', 'nan'] and v_f.lower() not in ['none', 'nan']:
+            hora_raw = f"{v_i} às {v_f}"
+        elif v_i and v_i.lower() not in ['none', 'nan']:
+            hora_raw = v_i
+
+    if not hora_raw and col_h and col_h in primeiro:
+        hora_raw = str(primeiro.get(col_h, "")).strip()
+        if col_fim and col_fim in primeiro:
+            v_f = str(primeiro.get(col_fim, "")).strip()
+            if v_f and v_f.lower() not in ['none', 'nan'] and v_f not in hora_raw:
+                hora_raw = f"{hora_raw} às {v_f}"
+
+    if not hora_raw or hora_raw.lower() in ['none', 'nan', '', 'null']:
+        hora_raw = ""
+
+    s = re.sub(r'\b\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4}\b', '', hora_raw)
     s = re.sub(r'(\d{1,2}:\d{2})[a-zA-Z]+', r'\1', s)
-
-    # 3. Limpar sufixos comuns como hs, min, hrs, etc.
     s_clean = re.sub(r'\b(minutos|min|mins|horas|hora|hrs|hs|m)\b', '', s, flags=re.IGNORECASE)
-
-    # 4. Encontrar tokens de horários principais (ex: 18:00, 18h00, 18h, 1800, ou números isolados)
     raw_tokens = re.findall(r'(\d{1,2}:\d{2}|\d{1,2}[hH]\d{2}|\d{1,2}[hH]|\b\d{4}\b|\b\d{1,2}\b)', s_clean)
-    
-    def std_time(t):
-        t = t.strip()
-        m_h = re.match(r'^(\d{1,2})[hH](\d{2})?$', t)
-        if m_h:
-            h = m_h.group(1).zfill(2)
-            m = m_h.group(2) if m_h.group(2) else "00"
-            return f"{h}:{m}"
-        if ':' in t:
-            parts = t.split(':')
-            return f"{parts[0].zfill(2)}:{parts[1].zfill(2)}"
-        if len(t) == 4 and t.isdigit():
-            return f"{t[:2]}:{t[2:]}"
-        if len(t) <= 2 and t.isdigit():
-            return f"{t.zfill(2)}:00"
-        return t
 
     valid_times = []
     for t in raw_tokens:
         t_str = t.strip()
-        if not t_str:
-            continue
+        if not t_str: continue
         if len(t_str) == 4 and t_str.isdigit():
             val = int(t_str)
-            if 2020 <= val <= 2030: # ano
-                continue
-            if val > 2400 or int(t_str[2:]) > 59:
-                continue
+            if 2020 <= val <= 2030: continue
+            if val > 2400 or int(t_str[2:]) > 59: continue
         elif ':' in t_str:
             parts = t_str.split(':')
-            if int(parts[0]) > 24 or int(parts[1]) > 59:
-                continue
+            if int(parts[0]) > 24 or int(parts[1]) > 59: continue
         elif len(t_str) <= 2 and t_str.isdigit():
-            if int(t_str) > 24:
-                continue
+            if int(t_str) > 24: continue
         valid_times.append(t_str)
-        
+
+    # Se encontramos menos de 2 horários, varrer todas as colunas operacionais da linha em busca do 2º horário
+    if len(valid_times) < 2:
+        for col_name, col_val in primeiro.items():
+            if col_name in [col_v, col_c, col_d]:
+                continue
+            if e_coluna_policial(col_name):
+                continue
+            val_str = str(col_val).strip()
+            if not val_str or val_str.lower() in ['none', 'nan']:
+                continue
+            val_str_nodate = re.sub(r'\b\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4}\b', '', val_str)
+            tokens_extra = re.findall(r'(\d{1,2}:\d{2}|\d{1,2}[hH]\d{2}|\d{1,2}[hH]|\b\d{4}\b|\b\d{1,2}\b)', val_str_nodate)
+            for te in tokens_extra:
+                te_str = te.strip()
+                if len(te_str) == 4 and te_str.isdigit():
+                    val = int(te_str)
+                    if 2020 <= val <= 2030 or val > 2400 or int(te_str[2:]) > 59:
+                        continue
+                elif ':' in te_str:
+                    parts = te_str.split(':')
+                    if int(parts[0]) > 24 or int(parts[1]) > 59:
+                        continue
+                elif len(te_str) <= 2 and te_str.isdigit():
+                    if int(te_str) > 24:
+                        continue
+                
+                if not valid_times or std_time(te_str) != std_time(valid_times[0]):
+                    valid_times.append(te_str)
+                if len(valid_times) >= 2:
+                    break
+            if len(valid_times) >= 2:
+                break
+
     if len(valid_times) >= 2:
         h1 = std_time(valid_times[0])
         h2 = std_time(valid_times[1])
@@ -373,58 +408,56 @@ def ler_arquivo_pdf(file_bytes):
 
     return pd.DataFrame(rows_filtradas, columns=headers)
 
+def normalizar_texto(txt):
+    txt = str(txt).upper()
+    return re.sub(r'[ÁÀÂÃ]', 'A', re.sub(r'[ÉÈÊ]', 'E', re.sub(r'[ÍÌÎ]', 'I', re.sub(r'[ÓÒÔÕ]', 'O', re.sub(r'[ÚÙÛ]', 'U', txt)))))
+
+termos_policial = ["NOME", "POLICIAL", "EFETIVO", "GRADUACAO", "POSTO", "GRAD", "PM", "MILITAR", "INTEGRANTE", "RG", "CPF", "MATRICULA", "CONTATO", "TELEFONE", "RESPONSAVEL", "SERVIDOR"]
+
+def e_coluna_policial(col_nome):
+    col_norm = normalizar_texto(col_nome)
+    return any(tp in col_norm for tp in termos_policial)
+
+def encontrar_coluna_por_nome(termos, df_cols, ignorar_policial=False):
+    for termo in termos:
+        termo_norm = normalizar_texto(termo)
+        for col_upper, col_orig in df_cols.items():
+            col_norm = normalizar_texto(col_upper)
+            if ignorar_policial and e_coluna_policial(col_orig):
+                continue
+            if termo_norm in col_norm:
+                return col_orig
+    return None
+
 def processar_dataframe(df):
     if df is None or df.empty:
-        return df, None, None, None, None
+        return df, None, None, None, None, None, None
 
     cols = {str(c).upper().strip(): c for c in df.columns}
-    
-    def normalizar(txt):
-        txt = str(txt).upper()
-        return re.sub(r'[ÁÀÂÃ]', 'A', re.sub(r'[ÉÈÊ]', 'E', re.sub(r'[ÍÌÎ]', 'I', re.sub(r'[ÓÒÔÕ]', 'O', re.sub(r'[ÚÙÛ]', 'U', txt)))))
-
-    termos_policial = ["NOME", "POLICIAL", "EFETIVO", "GRADUACAO", "POSTO", "GRAD", "PM", "MILITAR", "INTEGRANTE", "RG", "CPF", "MATRICULA", "CONTATO", "TELEFONE", "RESPONSAVEL", "SERVIDOR"]
-
-    def e_coluna_policial(col_nome):
-        col_norm = normalizar(col_nome)
-        return any(tp in col_norm for tp in termos_policial)
-
-    def encontrar_coluna_por_nome(termos, df_cols, ignorar_policial=False):
-        for termo in termos:
-            termo_norm = normalizar(termo)
-            for col_upper, col_orig in df_cols.items():
-                col_norm = normalizar(col_upper)
-                if ignorar_policial and e_coluna_policial(col_orig):
-                    continue
-                if termo_norm in col_norm:
-                    return col_orig
-        return None
 
     col_volcher = encontrar_coluna_por_nome(["VOLCHER", "VOUCHER", "VOLCHE", "VOUCHE", "N°", "Nº", "NUMERO", "NRO", "CODIGO", "CARTAO"], cols)
     col_cidade = encontrar_coluna_por_nome(["CIDADE", "MUNICÍPIO", "MUNICIPIO", "LOCAL", "OPM", "MUNIC", "LOTAÇÃO", "POSTO"], cols)
     col_data = encontrar_coluna_por_nome(["DATA", "DIA", "PERIODO"], cols, ignorar_policial=True)
-    col_hora = encontrar_coluna_por_nome(["HORA", "HORARIO", "TURNO", "PERIODO", "INICIO", "ESCALA", "SERVICO", "TEMPO"], cols, ignorar_policial=True)
 
-    for col in df.columns:
-        if e_coluna_policial(col):
-            continue
-            
-        sample_vals = [str(v) for v in df[col].dropna().head(10).tolist()]
-        sample_text = " ".join(sample_vals)
-        
-        if col_hora is None and col not in [col_volcher, col_cidade, col_data]:
-            if re.search(r'\b\d{1,2}(?::\d{2}|h)\b', sample_text, re.IGNORECASE) or "AS" in sample_text.upper() or "ÀS" in sample_text.upper():
-                col_hora = col
+    col_inicio = encontrar_coluna_por_nome(["HORA INICIO", "HORA INICIAL", "INICIO", "INICIAL", "ENTRADA", "DESDE"], cols, ignorar_policial=True)
+    col_fim = encontrar_coluna_por_nome(["HORA FIM", "HORA TERMINO", "TERMINO", "FIM", "FINAL", "SAIDA", "ATE"], cols, ignorar_policial=True)
+    col_hora = encontrar_coluna_por_nome(["HORA", "HORARIO", "TURNO", "PERIODO", "ESCALA", "SERVICO", "TEMPO"], cols, ignorar_policial=True)
 
-        if col_volcher is None and col not in [col_cidade, col_data, col_hora]:
-            if any(re.search(r'^\d{1,5}$', v.strip()) for v in sample_vals):
-                col_volcher = col
+    if col_inicio and col_fim and col_inicio == col_fim:
+        col_fim = None
 
-        if col_data is None and col not in [col_volcher, col_cidade, col_hora]:
-            if re.search(r'\b\d{1,2}/\d{1,2}/\d{2,4}\b', sample_text) or re.search(r'\b\d{4}-\d{2}-\d{2}\b', sample_text):
-                col_data = col
+    if col_inicio and col_hora and col_inicio == col_hora and not col_fim:
+        for col_upper, col_orig in cols.items():
+            if col_orig in [col_volcher, col_cidade, col_data, col_inicio]:
+                continue
+            if e_coluna_policial(col_orig):
+                continue
+            col_norm = normalizar_texto(col_upper)
+            if any(term in col_norm for term in ["TERMINO", "FIM", "FINAL", "SAIDA", "ATE"]):
+                col_fim = col_orig
+                break
 
-    return df, col_volcher, col_cidade, col_data, col_hora
+    return df, col_volcher, col_cidade, col_data, col_hora, col_inicio, col_fim
 
 def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta-feira)", e_cidade_segura=False):
     doc = Document()
@@ -457,7 +490,6 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         r_cs.font.name = "Arial"
         r_cs.font.color.rgb = RGBColor(0, 32, 96)
 
-    # Data no cabeçalho principal do documento (por extenso)
     data_cabecalho_formatada = formatar_data_extenso(data_extenso)
 
     p_data = doc.add_paragraph()
@@ -475,13 +507,13 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
     r_obs.font.size = Pt(9.5)
     r_obs.font.name = "Arial"
 
-    df, col_v, col_c, col_d, col_h = processar_dataframe(df_escala)
+    df, col_v, col_c, col_d, col_h, col_ini, col_fim = processar_dataframe(df_escala)
 
-    for c in [col_v, col_c, col_d, col_h]:
+    for c in [col_v, col_c, col_d, col_h, col_ini, col_fim]:
         if c and c in df.columns:
             df[c] = df[c].astype(str).str.strip()
 
-    group_cols = [c for c in [col_v, col_c, col_d, col_h] if c is not None and c in df.columns]
+    group_cols = [c for c in [col_v, col_c, col_d, col_h, col_ini, col_fim] if c is not None and c in df.columns]
 
     if group_cols:
         grupos_iterator = df.groupby(group_cols, sort=False)
@@ -501,12 +533,10 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
 
         cidade_val = str(primeiro.get(col_c, "")).replace('None', '').replace('nan', '').strip() if col_c else ""
         
-        # Data dentro da tabela do card em formato curto ex: 23/09/2026
         data_raw = str(primeiro.get(col_d, "")).strip() if col_d else ""
         data_str = formatar_data_curta(data_raw) if data_raw else formatar_data_curta(data_cabecalho_formatada)
 
-        hora_raw = str(primeiro.get(col_h, "")).strip() if col_h else ""
-        hora_str = formatar_horario(hora_raw)
+        hora_str = formatar_horario(primeiro, col_h=col_h, col_ini=col_ini, col_fim=col_fim, col_v=col_v, col_c=col_c, col_d=col_d)
 
         table = doc.add_table(rows=5, cols=2)
         table.style = 'Table Grid'
@@ -617,7 +647,7 @@ def render_extrajornada():
             if e_cidade_segura:
                 st.info("ℹ️ Operação 'CIDADE SEGURA' identificada no arquivo. O cabeçalho do relatório incluirá este destaque.")
 
-            _, _, _, col_d, _ = processar_dataframe(df)
+            _, _, _, col_d, _, _, _ = processar_dataframe(df)
             data_sugerida_tela = "23 de setembro de 2026 (quarta-feira)"
             if col_d and col_d in df.columns and not df[col_d].dropna().empty:
                 primeira_data_val = df[col_d].dropna().iloc[0]
