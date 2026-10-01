@@ -188,7 +188,7 @@ def formatar_data_extenso(val):
     if " de " in val_str.lower() and ("feira" in val_str.lower() or "sábado" in val_str.lower() or "domingo" in val_str.lower()):
         return val_str
 
-    s_clean = val_str.split()[0] if val_str.split() else val_str
+    s_clean = val_str.split() if val_str.split() else val_str
     
     for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%Y/%m/%d"]:
         try:
@@ -231,7 +231,7 @@ def formatar_data_curta(val):
             mes_num = str(MESES_REV[mes_nome]).zfill(2)
             return f"{dia}/{mes_num}/{ano}"
 
-    s_clean = val_str.split()[0] if val_str.split() else val_str
+    s_clean = val_str.split() if val_str.split() else val_str
     for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%Y/%m/%d"]:
         try:
             dt = datetime.strptime(s_clean, fmt)
@@ -389,7 +389,7 @@ def ler_arquivo_pdf(file_bytes):
             break
 
     if header_idx == -1:
-        raw_headers = [f"COL_{i}" for i in range(len(data[0]))] if data else []
+        raw_headers = [f"COL_{i}" for i in range(len(data))] if data else []
         rows = data
     else:
         raw_headers = [str(h).strip() if str(h).strip() else f"COL_{i}" for i, h in enumerate(data[header_idx])]
@@ -512,6 +512,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
     else:
         grupos_iterator = enumerate(df.iterrows())
 
+    cidade_to_voucher = {}
+
     for group_idx, item in enumerate(grupos_iterator):
         if group_cols:
             chaves, grupo = item
@@ -521,10 +523,21 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             primeiro = row
 
         volcher_raw = str(primeiro.get(col_v, "")).replace('.0', '').replace('None', '').replace('nan', '').strip() if col_v else ""
-        volcher_val = volcher_raw if volcher_raw else str(group_idx + 1)
-
         cidade_val = str(primeiro.get(col_c, "")).replace('None', '').replace('nan', '').strip() if col_c else ""
-        
+
+        cidade_norm = cidade_val.strip().upper()
+        if cidade_norm:
+            if cidade_norm not in cidade_to_voucher:
+                cidade_to_voucher[cidade_norm] = len(cidade_to_voucher) + 1
+            voucher_by_city = str(cidade_to_voucher[cidade_norm])
+        else:
+            voucher_by_city = str(group_idx + 1)
+
+        if not volcher_raw or volcher_raw.lower() in ['none', 'nan'] or volcher_raw.isdigit():
+            volcher_val = voucher_by_city
+        else:
+            volcher_val = volcher_raw
+
         data_raw = str(primeiro.get(col_d, "")).strip() if col_d else ""
         data_str = formatar_data_curta(data_raw) if data_raw else formatar_data_curta(data_cabecalho_formatada)
 
