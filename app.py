@@ -61,7 +61,27 @@ def gerar_css_app(caminho_img):
         h1, h2, h3 {
             color: #F3F4F6 !important;
         }
+        .developer-footer {
+            position: fixed;
+            bottom: 12px;
+            right: 20px;
+            text-align: right;
+            font-size: 11px;
+            color: #9CA3AF;
+            z-index: 999999;
+            pointer-events: none;
+            font-family: sans-serif;
+            line-height: 1.25;
+            background-color: rgba(14, 17, 23, 0.75);
+            padding: 5px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
     </style>
+    <div class="developer-footer">
+        <strong>Developer:</strong><br/>
+        Nathan Wenzel
+    </div>
     """
     if caminho_img and os.path.exists(caminho_img):
         try:
@@ -125,7 +145,6 @@ if not st.session_state.autenticado:
             st.error("Senha incorreta! Verifique e tente novamente.")
     st.stop()
 
-
 # =========================================================
 # SISTEMA 1: EXTRAJORNADA VOLUNTÁRIA
 # =========================================================
@@ -136,7 +155,7 @@ def formatar_data_para_tela_inicial(val_str):
     if not val_str or str(val_str).strip().lower() in ['none', 'nan', '']:
         return "23 de setembro de 2026 (quarta-feira)"
     parts = str(val_str).strip().split()
-    s = parts[0] if parts else ""
+    s = parts if parts else ""
     for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y"]:
         try:
             dt = datetime.strptime(s, fmt)
@@ -220,14 +239,6 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         section.left_margin = Inches(0.7)
         section.right_margin = Inches(0.7)
 
-    caminho_img = obter_caminho_brasao()
-    if caminho_img:
-        p_img = doc.add_paragraph()
-        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p_img.paragraph_format.space_after = Pt(4)
-        run_img = p_img.add_run()
-        run_img.add_picture(caminho_img, width=Inches(0.9))
-
     p_hdr = doc.add_paragraph()
     p_hdr.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_hdr.paragraph_format.space_after = Pt(2)
@@ -271,7 +282,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
     group_cols = [c for c in [col_v, col_c] if c is not None]
 
     for group_idx, (chaves, grupo) in enumerate(df.groupby(group_cols if group_cols else df.columns)):
-        primeiro = grupo.iloc[0]
+        primeiro = grupo.iloc
         
         volcher_raw = str(primeiro.get(col_v, "")).replace('.0', '').replace('None', '').replace('nan', '').strip() if col_v else ""
         volcher_val = volcher_raw if volcher_raw else str(group_idx + 1)
@@ -289,8 +300,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         table.autofit = False
 
         for row in table.rows:
-            row.cells[0].width = Inches(2.0)
-            row.cells[1].width = Inches(4.5)
+            row.cells.width = Inches(2.0)
+            row.cells.width = Inches(4.5)
 
         campos = [
             ("CIDADE/VOLCHER", f"{cidade_val} - VOLCHER - {volcher_val}"),
@@ -302,8 +313,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         for i, (label, val) in enumerate(campos):
             r = table.rows[i]
             
-            c0 = r.cells[0]
-            p0 = c0.paragraphs[0]
+            c0 = r.cells
+            p0 = c0.paragraphs
             p0.paragraph_format.space_after = Pt(2)
             p0.paragraph_format.space_before = Pt(2)
             r0 = p0.add_run(label)
@@ -312,8 +323,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             r0.font.size = Pt(10)
             set_cell_background(c0, "D9E1F2")
 
-            c1 = r.cells[1]
-            p1 = c1.paragraphs[0]
+            c1 = r.cells
+            p1 = c1.paragraphs
             p1.paragraph_format.space_after = Pt(2)
             p1.paragraph_format.space_before = Pt(2)
             r1 = p1.add_run(val)
@@ -322,11 +333,11 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             r1.font.size = Pt(10)
             set_cell_background(c1, "FFFFFF")
 
-        r4 = table.rows[4]
-        c0 = r4.cells[0]
-        c1 = r4.cells[1]
+        r4 = table.rows
+        c0 = r4.cells
+        c1 = r4.cells
         c0.merge(c1)
-        p_obs_tbl = c0.paragraphs[0]
+        p_obs_tbl = c0.paragraphs
         p_obs_tbl.paragraph_format.space_after = Pt(3)
         p_obs_tbl.paragraph_format.space_before = Pt(3)
         p_obs_tbl.paragraph_format.line_spacing = 1.15
@@ -395,7 +406,7 @@ def render_extrajornada():
             _, _, _, col_d, _ = processar_dataframe(df)
             data_sugerida_tela = "23 de setembro de 2026 (quarta-feira)"
             if col_d and not df[col_d].dropna().empty:
-                primeira_data_val = str(df[col_d].dropna().iloc[0]).strip()
+                primeira_data_val = str(df[col_d].dropna().iloc).strip()
                 data_sugerida_tela = formatar_data_para_tela_inicial(primeira_data_val)
 
             data_cabecalho = st.text_input("Data para o cabeçalho do relatório", value=data_sugerida_tela)
@@ -405,7 +416,6 @@ def render_extrajornada():
                 st.download_button("📥 Baixar Relatório Preenchido (.docx)", docx_bytes, "RELATORIO_EXTRAJORNADA.docx")
         else:
             st.error("Não foi possível extrair dados da tabela. Verifique o arquivo enviado.")
-
 
 # =========================================================
 # SISTEMA 2: ORDEM DE SERVIÇO (OO -> OS)
@@ -806,7 +816,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
+                if len(cels) > 1 and cels == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
@@ -841,7 +851,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
                         for c_idx, cell_value in enumerate(row_data):
                             if c_idx < len(row_cells):
                                 cell = row_cells[c_idx]
-                                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+                                p = cell.paragraphs if cell.paragraphs else cell.add_paragraph()
                                 p.paragraph_format.space_before = Pt(3)
                                 p.paragraph_format.space_after = Pt(3)
                                 p.paragraph_format.line_spacing = 1.15
@@ -909,14 +919,14 @@ def gerar_ordem_servico_docx(fields):
     table_hdr.autofit = False
     table_hdr.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    row0 = table_hdr.rows[0]
-    cell_left = row0.cells[0]
-    cell_right = row0.cells[1]
+    row0 = table_hdr.rows
+    cell_left = row0.cells
+    cell_right = row0.cells
 
     cell_left.width = Inches(3.5)
     cell_right.width = Inches(3.0)
 
-    p_left = cell_left.paragraphs[0]
+    p_left = cell_left.paragraphs
     p_left.paragraph_format.space_after = Pt(2)
     p_left.paragraph_format.line_spacing = 1.2
     r_l = p_left.add_run("PMPR\n2º CRPM/18º BPM\nP/3")
@@ -924,7 +934,7 @@ def gerar_ordem_servico_docx(fields):
     r_l.font.name = "Arial"
     r_l.font.size = Pt(10)
 
-    p_right = cell_right.paragraphs[0]
+    p_right = cell_right.paragraphs
     p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_right.paragraph_format.space_after = Pt(2)
     p_right.paragraph_format.line_spacing = 1.2
@@ -1017,7 +1027,7 @@ def renderizar_conteudo_pdf(story, conteudo, style_subnum, style_body, style_tab
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
+                if len(cels) > 1 and cels == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
@@ -1240,7 +1250,6 @@ def render_ordem_servico():
         else:
             st.error("Não foi possível extrair texto do arquivo enviado. Verifique se o PDF ou DOCX contém texto pesquisável.")
 
-
 # =========================================================
 # TELA INICIAL / ROTEAMENTO DE PÁGINAS
 # =========================================================
@@ -1277,4 +1286,4 @@ elif st.session_state.pagina == "extrajornada":
     render_extrajornada()
 
 elif st.session_state.pagina == "ordem_servico":
-    render_ordem_servico()
+    render_ordem_servico() 
