@@ -156,7 +156,7 @@ def formatar_data_para_tela_inicial(val_str):
     if not val_str or str(val_str).strip().lower() in ['none', 'nan', '']:
         return "23 de setembro de 2026 (quarta-feira)"
     parts = str(val_str).strip().split()
-    s = parts[0] if parts else ""
+    s = parts if parts else ""
     for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y"]:
         try:
             dt = datetime.strptime(s, fmt)
@@ -168,6 +168,28 @@ def formatar_data_para_tela_inicial(val_str):
         except (ValueError, TypeError):
             pass
     return str(val_str).strip()
+
+def formatar_horario(hora_raw):
+    if not hora_raw or str(hora_raw).strip().lower() in ['none', 'nan', '']:
+        return "Das 18:00 às 23:59"
+    s = str(hora_raw).strip()
+    
+    if s.lower().startswith("das ") and "às" in s.lower():
+        return s
+        
+    m = re.search(r'(\d{1,2}(?::\d{2})?(?:h)?)\s*(?:às|as|a|-|até)\s*(\d{1,2}(?::\d{2})?(?:h)?)', s, re.IGNORECASE)
+    if m:
+        h1, h2 = m.group(1), m.group(2)
+        if not h1.endswith('h') and ':' not in h1 and len(h1) <= 2:
+            h1 = f"{h1}:00"
+        if not h2.endswith('h') and ':' not in h2 and len(h2) <= 2:
+            h2 = f"{h2}:00"
+        return f"Das {h1} às {h2}"
+        
+    if "às" in s.lower() or "das" in s.lower():
+        return s
+        
+    return f"Das {s} às 23:59"
 
 def verificar_cidade_segura(file_bytes, ext, df):
     if ext == "pdf" and file_bytes is not None:
@@ -280,28 +302,37 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
 
     df, col_v, col_c, col_d, col_h = processar_dataframe(df_escala)
 
-    group_cols = [c for c in [col_v, col_c] if c is not None]
+    group_cols = [c for c in [col_v, col_c, col_d, col_h] if c is not None]
 
-    for group_idx, (chaves, grupo) in enumerate(df.groupby(group_cols if group_cols else df.columns)):
-        primeiro = grupo.iloc[0]
-        
+    if group_cols:
+        grupos_iterator = df.groupby(group_cols, sort=False)
+    else:
+        grupos_iterator = enumerate(df.iterrows())
+
+    for group_idx, item in enumerate(grupos_iterator):
+        if group_cols:
+            chaves, grupo = item
+            primeiro = grupo.iloc
+        else:
+            _, row = item
+            primeiro = row
+
         volcher_raw = str(primeiro.get(col_v, "")).replace('.0', '').replace('None', '').replace('nan', '').strip() if col_v else ""
         volcher_val = volcher_raw if volcher_raw else str(group_idx + 1)
-        
+
         cidade_val = str(primeiro.get(col_c, "")).replace('None', '').replace('nan', '').strip() if col_c else ""
         data_str = str(primeiro.get(col_d, "23/09/2026")).strip() if col_d else "23/09/2026"
-        
-        hora_str = str(primeiro.get(col_h, "18:00")).strip() if col_h else "18:00"
-        if "às" not in hora_str.lower() and "das" not in hora_str.lower():
-            hora_str = f"Das {hora_str} às 23:59"
-        
+
+        hora_raw = str(primeiro.get(col_h, "")).strip() if col_h else ""
+        hora_str = formatar_horario(hora_raw)
+
         table = doc.add_table(rows=5, cols=2)
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
         table.autofit = False
 
         for row in table.rows:
-            row.cells[0].width = Inches(2.0)
+            row.cells.width = Inches(2.0)
             row.cells[1].width = Inches(4.5)
 
         campos = [
@@ -313,9 +344,9 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
 
         for i, (label, val) in enumerate(campos):
             r = table.rows[i]
-            
-            c0 = r.cells[0]
-            p0 = c0.paragraphs[0]
+
+            c0 = r.cells
+            p0 = c0.paragraphs
             p0.paragraph_format.space_after = Pt(2)
             p0.paragraph_format.space_before = Pt(2)
             r0 = p0.add_run(label)
@@ -325,7 +356,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             set_cell_background(c0, "D9E1F2")
 
             c1 = r.cells[1]
-            p1 = c1.paragraphs[0]
+            p1 = c1.paragraphs
             p1.paragraph_format.space_after = Pt(2)
             p1.paragraph_format.space_before = Pt(2)
             r1 = p1.add_run(val)
@@ -334,11 +365,11 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             r1.font.size = Pt(10)
             set_cell_background(c1, "FFFFFF")
 
-        r4 = table.rows[4]
-        c0 = r4.cells[0]
+        r4 = table.rows[2]
+        c0 = r4.cells
         c1 = r4.cells[1]
         c0.merge(c1)
-        p_obs_tbl = c0.paragraphs[0]
+        p_obs_tbl = c0.paragraphs
         p_obs_tbl.paragraph_format.space_after = Pt(3)
         p_obs_tbl.paragraph_format.space_before = Pt(3)
         p_obs_tbl.paragraph_format.line_spacing = 1.15
@@ -407,7 +438,7 @@ def render_extrajornada():
             _, _, _, col_d, _ = processar_dataframe(df)
             data_sugerida_tela = "23 de setembro de 2026 (quarta-feira)"
             if col_d and not df[col_d].dropna().empty:
-                primeira_data_val = str(df[col_d].dropna().iloc[0]).strip()
+                primeira_data_val = str(df[col_d].dropna().iloc).strip()
                 data_sugerida_tela = formatar_data_para_tela_inicial(primeira_data_val)
 
             data_cabecalho = st.text_input("Data para o cabeçalho do relatório", value=data_sugerida_tela)
@@ -818,7 +849,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
+                if len(cels) > 1 and cels == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
@@ -853,7 +884,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
                         for c_idx, cell_value in enumerate(row_data):
                             if c_idx < len(row_cells):
                                 cell = row_cells[c_idx]
-                                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+                                p = cell.paragraphs if cell.paragraphs else cell.add_paragraph()
                                 p.paragraph_format.space_before = Pt(3)
                                 p.paragraph_format.space_after = Pt(3)
                                 p.paragraph_format.line_spacing = 1.15
@@ -921,14 +952,14 @@ def gerar_ordem_servico_docx(fields):
     table_hdr.autofit = False
     table_hdr.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    row0 = table_hdr.rows[0]
-    cell_left = row0.cells[0]
+    row0 = table_hdr.rows
+    cell_left = row0.cells
     cell_right = row0.cells[1]
 
     cell_left.width = Inches(3.5)
     cell_right.width = Inches(3.0)
 
-    p_left = cell_left.paragraphs[0]
+    p_left = cell_left.paragraphs
     p_left.paragraph_format.space_after = Pt(2)
     p_left.paragraph_format.line_spacing = 1.2
     r_l = p_left.add_run("PMPR\n2º CRPM/18º BPM\nP/3")
@@ -936,7 +967,7 @@ def gerar_ordem_servico_docx(fields):
     r_l.font.name = "Arial"
     r_l.font.size = Pt(10)
 
-    p_right = cell_right.paragraphs[0]
+    p_right = cell_right.paragraphs
     p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_right.paragraph_format.space_after = Pt(2)
     p_right.paragraph_format.line_spacing = 1.2
@@ -1029,7 +1060,7 @@ def renderizar_conteudo_pdf(story, conteudo, style_subnum, style_body, style_tab
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
+                if len(cels) > 1 and cels == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
