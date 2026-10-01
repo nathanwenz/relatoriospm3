@@ -24,7 +24,7 @@ from reportlab.lib.units import inch
 # =========================================================
 # CONFIGURAÇÃO DA PÁGINA E TEMA (CSS)
 # =========================================================
-st.set_page_config(page_title="18º BPM — Gerador de Relatórios", page_icon="🛡️️", layout="centered")
+st.set_page_config(page_title="18º BPM — Gerador de Relatórios", page_icon="🛡️", layout="centered")
 
 SENHA_CORRETA = "deusa"
 
@@ -157,7 +157,7 @@ def formatar_data_para_tela_inicial(val_str):
     if not val_str or str(val_str).strip().lower() in ['none', 'nan', '']:
         return "23 de setembro de 2026 (quarta-feira)"
     parts = str(val_str).strip().split()
-    s = parts[0] if parts else ""
+    s = parts if parts else ""
     for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y"]:
         try:
             dt = datetime.strptime(s, fmt)
@@ -171,23 +171,23 @@ def formatar_data_para_tela_inicial(val_str):
     return str(val_str).strip()
 
 def formatar_horario(hora_raw):
+    """Extrai estritamente o intervalo de horário, eliminando nomes de policiais ou patentes."""
     if not hora_raw or str(hora_raw).strip().lower() in ['none', 'nan', '', 'null']:
         return "Das 18:00 às 23:59"
     
     s = str(hora_raw).strip()
     
-    if s.lower().startswith("das ") and ("às" in s.lower() or "as" in s.lower()):
-        return re.sub(r'\bas\b', 'às', s, flags=re.IGNORECASE)
-        
-    m = re.search(r'(\d{1,2}(?::\d{2})?(?:\s*h)?)\s*(?:às|as|a|-|/|até|\s)\s*(\d{1,2}(?::\d{2})?(?:\s*h)?)', s, re.IGNORECASE)
-    if m:
-        h1, h2 = m.group(1).strip(), m.group(2).strip()
+    # Busca por padrão de dois horários (ex: 12:00 as 17:59, 13:00 - 19:00, 12h às 18h)
+    m_range = re.search(r'(\d{1,2}(?::\d{2})?(?:\s*h)?)\s*(?:às|as|a|-|/|até|\s)\s*(\d{1,2}(?::\d{2})?(?:\s*h)?)', s, re.IGNORECASE)
+    if m_range:
+        h1, h2 = m_range.group(1).strip(), m_range.group(2).strip()
         if not h1.endswith('h') and ':' not in h1 and len(h1) <= 2:
             h1 = f"{h1}:00"
         if not h2.endswith('h') and ':' not in h2 and len(h2) <= 2:
             h2 = f"{h2}:00"
         return f"Das {h1} às {h2}"
         
+    # Busca por padrão de um horário único inicial (ex: 12:00, 18h)
     m_single = re.search(r'(\d{1,2}(?::\d{2})?(?:\s*h)?)', s)
     if m_single:
         h1 = m_single.group(1).strip()
@@ -195,7 +195,7 @@ def formatar_horario(hora_raw):
             h1 = f"{h1}:00"
         return f"Das {h1} às 23:59"
         
-    return s
+    return "Das 18:00 às 23:59"
 
 def verificar_cidade_segura(file_bytes, ext, df):
     if ext == "pdf" and file_bytes is not None:
@@ -260,7 +260,7 @@ def ler_arquivo_pdf(file_bytes):
             break
 
     if header_idx == -1:
-        headers = [f"COL_{i}" for i in range(len(data[0]))]
+        headers = [f"COL_{i}" for i in range(len(data[0]))] if data else []
         rows = data
     else:
         headers = [str(h).strip() if str(h).strip() else f"COL_{i}" for i, h in enumerate(data[header_idx])]
@@ -289,22 +289,34 @@ def processar_dataframe(df):
         txt = str(txt).upper()
         return re.sub(r'[ÁÀÂÃ]', 'A', re.sub(r'[ÉÈÊ]', 'E', re.sub(r'[ÍÌÎ]', 'I', re.sub(r'[ÓÒÔÕ]', 'O', re.sub(r'[ÚÙÛ]', 'U', txt)))))
 
-    def encontrar_coluna_por_nome(termos, df_cols):
+    # Excluir estritamente colunas que sejam de nomes de policiais
+    termos_policial = ["NOME", "POLICIAL", "EFETIVO", "GRADUACAO", "POSTO", "GRAD", "PM", "MILITAR", "INTEGRANTE", "RG", "CPF", "MATRICULA", "CONTATO", "TELEFONE", "RESPONSAVEL", "SERVIDOR"]
+
+    def e_coluna_policial(col_nome):
+        col_norm = normalizar(col_nome)
+        return any(tp in col_norm for tp in termos_policial)
+
+    def encontrar_coluna_por_nome(termos, df_cols, ignorar_policial=False):
         for termo in termos:
             termo_norm = normalizar(termo)
             for col_upper, col_orig in df_cols.items():
                 col_norm = normalizar(col_upper)
+                if ignorar_policial and e_coluna_policial(col_orig):
+                    continue
                 if termo_norm in col_norm:
                     return col_orig
         return None
 
     col_volcher = encontrar_coluna_por_nome(["VOLCHER", "VOUCHER", "VOLCHE", "VOUCHE", "N°", "Nº", "NUMERO", "NRO", "CODIGO", "CARTAO"], cols)
     col_cidade = encontrar_coluna_por_nome(["CIDADE", "MUNICÍPIO", "MUNICIPIO", "LOCAL", "OPM", "MUNIC", "LOTAÇÃO", "POSTO"], cols)
-    col_data = encontrar_coluna_por_nome(["DATA", "DIA", "PERIODO"], cols)
-    col_hora = encontrar_coluna_por_nome(["HORA", "HORARIO", "TURNO", "PERIODO", "INICIO", "ESCALA", "SERVICO", "TEMPO"], cols)
+    col_data = encontrar_coluna_por_nome(["DATA", "DIA", "PERIODO"], cols, ignorar_policial=True)
+    col_hora = encontrar_coluna_por_nome(["HORA", "HORARIO", "TURNO", "PERIODO", "INICIO", "ESCALA", "SERVICO", "TEMPO"], cols, ignorar_policial=True)
 
-    # Fallback por CONTEÚDO da coluna
+    # Fallback por CONTEÚDO da coluna (ignorando colunas de nomes de policiais)
     for col in df.columns:
+        if e_coluna_policial(col):
+            continue
+            
         sample_vals = [str(v) for v in df[col].dropna().head(10).tolist()]
         sample_text = " ".join(sample_vals)
         
@@ -371,7 +383,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
     df, col_v, col_c, col_d, col_h = processar_dataframe(df_escala)
 
     for c in [col_v, col_c, col_d, col_h]:
-        if c in df.columns:
+        if c and c in df.columns:
             df[c] = df[c].astype(str).str.strip()
 
     group_cols = [c for c in [col_v, col_c, col_d, col_h] if c is not None and c in df.columns]
@@ -509,7 +521,7 @@ def render_extrajornada():
 
             _, _, _, col_d, _ = processar_dataframe(df)
             data_sugerida_tela = "23 de setembro de 2026 (quarta-feira)"
-            if col_d and not df[col_d].dropna().empty:
+            if col_d and col_d in df.columns and not df[col_d].dropna().empty:
                 primeira_data_val = str(df[col_d].dropna().iloc[0]).strip()
                 data_sugerida_tela = formatar_data_para_tela_inicial(primeira_data_val)
 
@@ -1025,13 +1037,13 @@ def gerar_ordem_servico_docx(fields):
     table_hdr.alignment = WD_TABLE_ALIGNMENT.CENTER
 
     row0 = table_hdr.rows
-    cell_left = row0.cells
-    cell_right = row0.cells
+    cell_left = row0.cells[0]
+    cell_right = row0.cells[1]
 
     cell_left.width = Inches(3.5)
     cell_right.width = Inches(3.0)
 
-    p_left = cell_left.paragraphs
+    p_left = cell_left.paragraphs[0]
     p_left.paragraph_format.space_after = Pt(2)
     p_left.paragraph_format.line_spacing = 1.2
     r_l = p_left.add_run("PMPR\n2º CRPM/18º BPM\nP/3")
@@ -1039,7 +1051,7 @@ def gerar_ordem_servico_docx(fields):
     r_l.font.name = "Arial"
     r_l.font.size = Pt(10)
 
-    p_right = cell_right.paragraphs
+    p_right = cell_right.paragraphs[0]
     p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_right.paragraph_format.space_after = Pt(2)
     p_right.paragraph_format.line_spacing = 1.2
