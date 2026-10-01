@@ -152,9 +152,10 @@ if not st.session_state.autenticado:
 # =========================================================
 DIAS_SEMANA = { 0: "segunda-feira", 1: "terça-feira", 2: "quarta-feira", 3: "quinta-feira", 4: "sexta-feira", 5: "sábado", 6: "domingo" }
 MESES = { 1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril", 5: "maio", 6: "junho", 7: "julho", 8: "agosto", 9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro" }
+MESES_REV = { "janeiro": 1, "fevereiro": 2, "março": 3, "abril": 4, "maio": 5, "junho": 6, "julho": 7, "agosto": 8, "setembro": 9, "outubro": 10, "novembro": 11, "dezembro": 12 }
 
 def formatar_data_extenso(val):
-    """Converte qualquer data (string 'dd/mm/yyyy', Timestamp ou date) para 'xx de mês de ano (dia-da-semana)'."""
+    """Converte qualquer data para 'xx de mês de ano (dia-da-semana)' para uso no cabeçalho do relatório."""
     if val is None or pd.isna(val):
         return "23 de setembro de 2026 (quarta-feira)"
     
@@ -182,6 +183,46 @@ def formatar_data_extenso(val):
             ano = dt.year
             dia_sem = DIAS_SEMANA[dt.weekday()]
             return f"{dia} de {mes} de {ano} ({dia_sem})"
+        except (ValueError, TypeError):
+            pass
+            
+    return val_str
+
+def formatar_data_curta(val):
+    """Converte qualquer data para o formato curto numérico 'xx/yy/zzzz' para a tabela dos cards."""
+    if val is None or pd.isna(val):
+        return "23/09/2026"
+    
+    if isinstance(val, (pd.Timestamp, datetime)):
+        return val.strftime("%d/%m/%Y")
+        
+    val_str = str(val).strip()
+    if not val_str or val_str.lower() in ['none', 'nan', '', 'null']:
+        return "23/09/2026"
+
+    # Se já estiver no formato numérico
+    m = re.search(r'\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\b', val_str)
+    if m:
+        dia, mes, ano = m.group(1).zfill(2), m.group(2).zfill(2), m.group(3)
+        if len(ano) == 2:
+            ano = f"20{ano}"
+        return f"{dia}/{mes}/{ano}"
+
+    # Se estiver por extenso ex: "23 de setembro de 2026 (quarta-feira)"
+    m_ext = re.search(r'(\d{1,2})\s+de\s+([a-zç]+)\s+de\s+(\d{4})', val_str, re.IGNORECASE)
+    if m_ext:
+        dia = m_ext.group(1).zfill(2)
+        mes_nome = m_ext.group(2).lower()
+        ano = m_ext.group(3)
+        if mes_nome in MESES_REV:
+            mes_num = str(MESES_REV[mes_nome]).zfill(2)
+            return f"{dia}/{mes_num}/{ano}"
+
+    s_clean = val_str.split()[0] if val_str.split() else val_str
+    for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%Y/%m/%d"]:
+        try:
+            dt = datetime.strptime(s_clean, fmt)
+            return dt.strftime("%d/%m/%Y")
         except (ValueError, TypeError):
             pass
             
@@ -378,7 +419,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         r_cs.font.name = "Arial"
         r_cs.font.color.rgb = RGBColor(0, 32, 96)
 
-    # Garante que a data do cabeçalho principal esteja no formato por extenso
+    # Data no cabeçalho principal do documento (por extenso)
     data_cabecalho_formatada = formatar_data_extenso(data_extenso)
 
     p_data = doc.add_paragraph()
@@ -412,7 +453,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
     for group_idx, item in enumerate(grupos_iterator):
         if group_cols:
             chaves, grupo = item
-            primeiro = grupo.iloc[0]
+            primeiro = grupo.iloc
         else:
             _, row = item
             primeiro = row
@@ -422,9 +463,9 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
 
         cidade_val = str(primeiro.get(col_c, "")).replace('None', '').replace('nan', '').strip() if col_c else ""
         
-        # Garante que a data dentro da tabela do card também fique por extenso
+        # Data dentro da tabela do card em formato curto ex: 23/09/2026
         data_raw = str(primeiro.get(col_d, "")).strip() if col_d else ""
-        data_str = formatar_data_extenso(data_raw) if data_raw else data_cabecalho_formatada
+        data_str = formatar_data_curta(data_raw) if data_raw else formatar_data_curta(data_cabecalho_formatada)
 
         hora_raw = str(primeiro.get(col_h, "")).strip() if col_h else ""
         hora_str = formatar_horario(hora_raw)
@@ -435,8 +476,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         table.autofit = False
 
         for row in table.rows:
-            row.cells[0].width = Inches(2.0)
-            row.cells[1].width = Inches(4.5)
+            row.cells.width = Inches(2.0)
+            row.cells.width = Inches(4.5)
 
         campos = [
             ("CIDADE/VOLCHER", f"{cidade_val} - VOLCHER - {volcher_val}"),
@@ -448,8 +489,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         for i, (label, val) in enumerate(campos):
             r = table.rows[i]
 
-            c0 = r.cells[0]
-            p0 = c0.paragraphs[0]
+            c0 = r.cells
+            p0 = c0.paragraphs
             p0.paragraph_format.space_after = Pt(2)
             p0.paragraph_format.space_before = Pt(2)
             r0 = p0.add_run(label)
@@ -458,8 +499,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             r0.font.size = Pt(10)
             set_cell_background(c0, "D9E1F2")
 
-            c1 = r.cells[1]
-            p1 = c1.paragraphs[0]
+            c1 = r.cells
+            p1 = c1.paragraphs
             p1.paragraph_format.space_after = Pt(2)
             p1.paragraph_format.space_before = Pt(2)
             r1 = p1.add_run(val)
@@ -468,11 +509,11 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             r1.font.size = Pt(10)
             set_cell_background(c1, "FFFFFF")
 
-        r4 = table.rows[4]
-        c0 = r4.cells[0]
-        c1 = r4.cells[1]
+        r4 = table.rows
+        c0 = r4.cells
+        c1 = r4.cells
         c0.merge(c1)
-        p_obs_tbl = c0.paragraphs[0]
+        p_obs_tbl = c0.paragraphs
         p_obs_tbl.paragraph_format.space_after = Pt(3)
         p_obs_tbl.paragraph_format.space_before = Pt(3)
         p_obs_tbl.paragraph_format.line_spacing = 1.15
@@ -541,7 +582,7 @@ def render_extrajornada():
             _, _, _, col_d, _ = processar_dataframe(df)
             data_sugerida_tela = "23 de setembro de 2026 (quarta-feira)"
             if col_d and col_d in df.columns and not df[col_d].dropna().empty:
-                primeira_data_val = df[col_d].dropna().iloc[0]
+                primeira_data_val = df[col_d].dropna().iloc
                 data_sugerida_tela = formatar_data_extenso(primeira_data_val)
 
             data_cabecalho = st.text_input("Data para o cabeçalho do relatório", value=data_sugerida_tela)
@@ -987,7 +1028,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
                         for c_idx, cell_value in enumerate(row_data):
                             if c_idx < len(row_cells):
                                 cell = row_cells[c_idx]
-                                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+                                p = cell.paragraphs if cell.paragraphs else cell.add_paragraph()
                                 p.paragraph_format.space_before = Pt(3)
                                 p.paragraph_format.space_after = Pt(3)
                                 p.paragraph_format.line_spacing = 1.15
@@ -1055,14 +1096,14 @@ def gerar_ordem_servico_docx(fields):
     table_hdr.autofit = False
     table_hdr.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    row0 = table_hdr.rows[0]
-    cell_left = row0.cells[0]
-    cell_right = row0.cells[1]
+    row0 = table_hdr.rows
+    cell_left = row0.cells
+    cell_right = row0.cells
 
     cell_left.width = Inches(3.5)
     cell_right.width = Inches(3.0)
 
-    p_left = cell_left.paragraphs[0]
+    p_left = cell_left.paragraphs
     p_left.paragraph_format.space_after = Pt(2)
     p_left.paragraph_format.line_spacing = 1.2
     r_l = p_left.add_run("PMPR\n2º CRPM/18º BPM\nP/3")
@@ -1070,7 +1111,7 @@ def gerar_ordem_servico_docx(fields):
     r_l.font.name = "Arial"
     r_l.font.size = Pt(10)
 
-    p_right = cell_right.paragraphs[0]
+    p_right = cell_right.paragraphs
     p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_right.paragraph_format.space_after = Pt(2)
     p_right.paragraph_format.line_spacing = 1.2
