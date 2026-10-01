@@ -170,37 +170,57 @@ def deduplicate_headers(headers):
     return new_headers
 
 def formatar_data_extenso(val):
-    """Converte qualquer data para 'xx de mês de ano (dia-da-semana)' para uso no cabeçalho do relatório."""
+    """Converte qualquer data para 'xx de mês de ano - dia-da-semana' para uso no cabeçalho e na tela."""
     if val is None or pd.isna(val):
-        return "23 de setembro de 2026 (quarta-feira)"
+        return "23 de setembro de 2026 - quarta-feira"
     
     if isinstance(val, (pd.Timestamp, datetime)):
         dia = val.day
         mes = MESES[val.month]
         ano = val.year
         dia_sem = DIAS_SEMANA[val.weekday()]
-        return f"{dia} de {mes} de {ano} ({dia_sem})"
-    
+        return f"{dia} de {mes} de {ano} - {dia_sem}"
+        
     val_str = str(val).strip()
     if not val_str or val_str.lower() in ['none', 'nan', '', 'null']:
-        return "23 de setembro de 2026 (quarta-feira)"
-        
-    if " de " in val_str.lower() and ("feira" in val_str.lower() or "sábado" in val_str.lower() or "domingo" in val_str.lower()):
-        return val_str
+        return "23 de setembro de 2026 - quarta-feira"
+
+    if " de " in val_str.lower():
+        val_str_clean = re.sub(r'\s*\\(([^)]+)\\)', r' - \1', val_str)
+        return val_str_clean
+
+    m_iso = re.search(r'\b(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})\b', val_str)
+    if m_iso:
+        ano = int(m_iso.group(1))
+        mes = int(m_iso.group(2))
+        dia = int(m_iso.group(3))
+        try:
+            dt = datetime(ano, mes, dia)
+            return f"{dia} de {MESES[mes]} de {ano} - {DIAS_SEMANA[dt.weekday()]}"
+        except ValueError:
+            pass
+
+    m = re.search(r'\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\b', val_str)
+    if m:
+        dia = int(m.group(1))
+        mes = int(m.group(2))
+        ano = int(m.group(3))
+        if ano < 100:
+            ano += 2000
+        try:
+            dt = datetime(ano, mes, dia)
+            return f"{dia} de {MESES[mes]} de {ano} - {DIAS_SEMANA[dt.weekday()]}"
+        except ValueError:
+            pass
 
     s_clean = val_str.split() if val_str.split() else val_str
-    
     for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%Y/%m/%d"]:
         try:
             dt = datetime.strptime(s_clean, fmt)
-            dia = dt.day
-            mes = MESES[dt.month]
-            ano = dt.year
-            dia_sem = DIAS_SEMANA[dt.weekday()]
-            return f"{dia} de {mes} de {ano} ({dia_sem})"
+            return f"{dt.day} de {MESES[dt.month]} de {dt.year} - {DIAS_SEMANA[dt.weekday()]}"
         except (ValueError, TypeError):
             pass
-            
+
     return val_str
 
 def formatar_data_curta(val):
@@ -250,7 +270,7 @@ def std_time(t):
         return f"{h}:{m}"
     if ':' in t:
         parts = t.split(':')
-        return f"{parts[0].zfill(2)}:{parts[1].zfill(2)}"
+        return f"{parts.zfill(2)}:{parts[1].zfill(2)}"
     if len(t) == 4 and t.isdigit():
         return f"{t[:2]}:{t[2:]}"
     if len(t) <= 2 and t.isdigit():
@@ -282,7 +302,7 @@ def formatar_horario(primeiro, time_cols=None, col_v=None, col_c=None, col_d=Non
                     if 2020 <= val_num <= 2030 or val_num > 2400 or int(t_str[2:]) > 59: continue
                 elif ':' in t_str:
                     parts = t_str.split(':')
-                    if int(parts[0]) > 24 or int(parts[1]) > 59: continue
+                    if int(parts) > 24 or int(parts[1]) > 59: continue
                 elif len(t_str) <= 2 and t_str.isdigit():
                     if int(t_str) > 24: continue
                 valid_times.append(std_time(t_str))
@@ -307,12 +327,12 @@ def formatar_horario(primeiro, time_cols=None, col_v=None, col_c=None, col_d=Non
                     if 2020 <= val <= 2030 or val > 2400 or int(te_str[2:]) > 59: continue
                 elif ':' in te_str:
                     parts = te_str.split(':')
-                    if int(parts[0]) > 24 or int(parts[1]) > 59: continue
+                    if int(parts) > 24 or int(parts[1]) > 59: continue
                 elif len(te_str) <= 2 and te_str.isdigit():
                     if int(te_str) > 24: continue
                 
                 t_formatted = std_time(te_str)
-                if not valid_times or t_formatted != valid_times[0]:
+                if not valid_times or t_formatted != valid_times:
                     valid_times.append(t_formatted)
                 if len(valid_times) >= 2:
                     break
@@ -320,9 +340,9 @@ def formatar_horario(primeiro, time_cols=None, col_v=None, col_c=None, col_d=Non
                 break
 
     if len(valid_times) >= 2:
-        return f"Das {valid_times[0]} às {valid_times[1]}"
+        return f"Das {valid_times} às {valid_times[1]}"
     elif len(valid_times) == 1:
-        return f"Das {valid_times[0]} às 23:59"
+        return f"Das {valid_times} às 23:59"
     else:
         return "Das 18:00 às 23:59"
 
@@ -451,7 +471,7 @@ def processar_dataframe(df):
 
     return df, col_volcher, col_cidade, col_data, col_hora, time_cols
 
-def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta-feira)", e_cidade_segura=False):
+def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 - quarta-feira", e_cidade_segura=False):
     doc = Document()
     for section in doc.sections:
         section.top_margin = Inches(0.6)
@@ -517,7 +537,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
     for group_idx, item in enumerate(grupos_iterator):
         if group_cols:
             chaves, grupo = item
-            primeiro = grupo.iloc[0]
+            primeiro = grupo.iloc
         else:
             _, row = item
             primeiro = row
@@ -549,7 +569,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         table.autofit = False
 
         for row in table.rows:
-            row.cells[0].width = Inches(2.0)
+            row.cells.width = Inches(2.0)
             row.cells[1].width = Inches(4.5)
 
         campos = [
@@ -562,8 +582,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         for i, (label, val) in enumerate(campos):
             r = table.rows[i]
 
-            c0 = r.cells[0]
-            p0 = c0.paragraphs[0]
+            c0 = r.cells
+            p0 = c0.paragraphs
             p0.paragraph_format.space_after = Pt(2)
             p0.paragraph_format.space_before = Pt(2)
             r0 = p0.add_run(label)
@@ -573,7 +593,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             set_cell_background(c0, "D9E1F2")
 
             c1 = r.cells[1]
-            p1 = c1.paragraphs[0]
+            p1 = c1.paragraphs
             p1.paragraph_format.space_after = Pt(2)
             p1.paragraph_format.space_before = Pt(2)
             r1 = p1.add_run(val)
@@ -582,11 +602,11 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             r1.font.size = Pt(10)
             set_cell_background(c1, "FFFFFF")
 
-        r4 = table.rows[4]
-        c0 = r4.cells[0]
+        r4 = table.rows[2]
+        c0 = r4.cells
         c1 = r4.cells[1]
         c0.merge(c1)
-        p_obs_tbl = c0.paragraphs[0]
+        p_obs_tbl = c0.paragraphs
         p_obs_tbl.paragraph_format.space_after = Pt(3)
         p_obs_tbl.paragraph_format.space_before = Pt(3)
         p_obs_tbl.paragraph_format.line_spacing = 1.15
@@ -653,9 +673,9 @@ def render_extrajornada():
                 st.info("ℹ️ Operação 'CIDADE SEGURA' identificada no arquivo. O cabeçalho do relatório incluirá este destaque.")
 
             _, _, _, col_d, _, _ = processar_dataframe(df)
-            data_sugerida_tela = "23 de setembro de 2026 (quarta-feira)"
+            data_sugerida_tela = "23 de setembro de 2026 - quarta-feira"
             if col_d and col_d in df.columns and not df[col_d].dropna().empty:
-                primeira_data_val = df[col_d].dropna().iloc[0]
+                primeira_data_val = df[col_d].dropna().iloc
                 data_sugerida_tela = formatar_data_extenso(primeira_data_val)
 
             data_cabecalho = st.text_input("Data para o cabeçalho do relatório", value=data_sugerida_tela)
@@ -1066,7 +1086,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
+                if len(cels) > 1 and cels == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
@@ -1101,7 +1121,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
                         for c_idx, cell_value in enumerate(row_data):
                             if c_idx < len(row_cells):
                                 cell = row_cells[c_idx]
-                                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+                                p = cell.paragraphs if cell.paragraphs else cell.add_paragraph()
                                 p.paragraph_format.space_before = Pt(3)
                                 p.paragraph_format.space_after = Pt(3)
                                 p.paragraph_format.line_spacing = 1.15
@@ -1169,14 +1189,14 @@ def gerar_ordem_servico_docx(fields):
     table_hdr.autofit = False
     table_hdr.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    row0 = table_hdr.rows[0]
-    cell_left = row0.cells[0]
+    row0 = table_hdr.rows
+    cell_left = row0.cells
     cell_right = row0.cells[1]
 
     cell_left.width = Inches(3.5)
     cell_right.width = Inches(3.0)
 
-    p_left = cell_left.paragraphs[0]
+    p_left = cell_left.paragraphs
     p_left.paragraph_format.space_after = Pt(2)
     p_left.paragraph_format.line_spacing = 1.2
     r_l = p_left.add_run("PMPR\n2º CRPM/18º BPM\nP/3")
@@ -1184,7 +1204,7 @@ def gerar_ordem_servico_docx(fields):
     r_l.font.name = "Arial"
     r_l.font.size = Pt(10)
 
-    p_right = cell_right.paragraphs[0]
+    p_right = cell_right.paragraphs
     p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_right.paragraph_format.space_after = Pt(2)
     p_right.paragraph_format.line_spacing = 1.2
@@ -1277,7 +1297,7 @@ def renderizar_conteudo_pdf(story, conteudo, style_subnum, style_body, style_tab
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
+                if len(cels) > 1 and cels == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
