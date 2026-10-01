@@ -24,7 +24,7 @@ from reportlab.lib.units import inch
 # =========================================================
 # CONFIGURAÇÃO DA PÁGINA E TEMA (CSS)
 # =========================================================
-st.set_page_config(page_title="18º BPM — Gerador de Relatórios", page_icon="🛡️️", layout="centered")
+st.set_page_config(page_title="18º BPM — Gerador de Relatórios", page_icon="🛡️", layout="centered")
 
 SENHA_CORRETA = "deusa"
 
@@ -474,8 +474,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         table.autofit = False
 
         for row in table.rows:
-            row.cells.width = Inches(2.0)
-            row.cells.width = Inches(4.5)
+            row.cells[0].width = Inches(2.0)
+            row.cells[1].width = Inches(4.5)
 
         campos = [
             ("CIDADE/VOLCHER", f"{cidade_val} - VOLCHER - {volcher_val}"),
@@ -487,8 +487,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         for i, (label, val) in enumerate(campos):
             r = table.rows[i]
 
-            c0 = r.cells
-            p0 = c0.paragraphs
+            c0 = r.cells[0]
+            p0 = c0.paragraphs[0]
             p0.paragraph_format.space_after = Pt(2)
             p0.paragraph_format.space_before = Pt(2)
             r0 = p0.add_run(label)
@@ -497,8 +497,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             r0.font.size = Pt(10)
             set_cell_background(c0, "D9E1F2")
 
-            c1 = r.cells
-            p1 = c1.paragraphs
+            c1 = r.cells[1]
+            p1 = c1.paragraphs[0]
             p1.paragraph_format.space_after = Pt(2)
             p1.paragraph_format.space_before = Pt(2)
             r1 = p1.add_run(val)
@@ -507,11 +507,11 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
             r1.font.size = Pt(10)
             set_cell_background(c1, "FFFFFF")
 
-        r4 = table.rows
-        c0 = r4.cells
-        c1 = r4.cells
+        r4 = table.rows[4]
+        c0 = r4.cells[0]
+        c1 = r4.cells[1]
         c0.merge(c1)
-        p_obs_tbl = c0.paragraphs
+        p_obs_tbl = c0.paragraphs[0]
         p_obs_tbl.paragraph_format.space_after = Pt(3)
         p_obs_tbl.paragraph_format.space_before = Pt(3)
         p_obs_tbl.paragraph_format.line_spacing = 1.15
@@ -991,7 +991,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels == "":
+                if len(cels) > 1 and cels[0] == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
@@ -1026,7 +1026,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
                         for c_idx, cell_value in enumerate(row_data):
                             if c_idx < len(row_cells):
                                 cell = row_cells[c_idx]
-                                p = cell.paragraphs if cell.paragraphs else cell.add_paragraph()
+                                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
                                 p.paragraph_format.space_before = Pt(3)
                                 p.paragraph_format.space_after = Pt(3)
                                 p.paragraph_format.line_spacing = 1.15
@@ -1094,14 +1094,14 @@ def gerar_ordem_servico_docx(fields):
     table_hdr.autofit = False
     table_hdr.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    row0 = table_hdr.rows
-    cell_left = row0.cells
-    cell_right = row0.cells
+    row0 = table_hdr.rows[0]
+    cell_left = row0.cells[0]
+    cell_right = row0.cells[1]
 
     cell_left.width = Inches(3.5)
     cell_right.width = Inches(3.0)
 
-    p_left = cell_left.paragraphs
+    p_left = cell_left.paragraphs[0]
     p_left.paragraph_format.space_after = Pt(2)
     p_left.paragraph_format.line_spacing = 1.2
     r_l = p_left.add_run("PMPR\n2º CRPM/18º BPM\nP/3")
@@ -1109,7 +1109,7 @@ def gerar_ordem_servico_docx(fields):
     r_l.font.name = "Arial"
     r_l.font.size = Pt(10)
 
-    p_right = cell_right.paragraphs
+    p_right = cell_right.paragraphs[0]
     p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_right.paragraph_format.space_after = Pt(2)
     p_right.paragraph_format.line_spacing = 1.2
@@ -1202,7 +1202,7 @@ def renderizar_conteudo_pdf(story, conteudo, style_subnum, style_body, style_tab
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels == "":
+                if len(cels) > 1 and cels[0] == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
