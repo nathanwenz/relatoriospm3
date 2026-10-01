@@ -24,7 +24,7 @@ from reportlab.lib.units import inch
 # =========================================================
 # CONFIGURAÇÃO DA PÁGINA E TEMA (CSS)
 # =========================================================
-st.set_page_config(page_title="18º BPM — Gerador de Relatórios", page_icon="🛡️", layout="centered")
+st.set_page_config(page_title="18º BPM — Gerador de Relatórios", page_icon="🛡️️", layout="centered")
 
 SENHA_CORRETA = "deusa"
 
@@ -171,26 +171,31 @@ def formatar_data_para_tela_inicial(val_str):
     return str(val_str).strip()
 
 def formatar_horario(hora_raw):
-    if not hora_raw or str(hora_raw).strip().lower() in ['none', 'nan', '']:
+    if not hora_raw or str(hora_raw).strip().lower() in ['none', 'nan', '', 'null']:
         return "Das 18:00 às 23:59"
+    
     s = str(hora_raw).strip()
     
-    if s.lower().startswith("das ") and "às" in s.lower():
-        return s
+    if s.lower().startswith("das ") and ("às" in s.lower() or "as" in s.lower()):
+        return re.sub(r'\bas\b', 'às', s, flags=re.IGNORECASE)
         
-    m = re.search(r'(\d{1,2}(?::\d{2})?(?:h)?)\s*(?:às|as|a|-|até)\s*(\d{1,2}(?::\d{2})?(?:h)?)', s, re.IGNORECASE)
+    m = re.search(r'(\d{1,2}(?::\d{2})?(?:\s*h)?)\s*(?:às|as|a|-|/|até|\s)\s*(\d{1,2}(?::\d{2})?(?:\s*h)?)', s, re.IGNORECASE)
     if m:
-        h1, h2 = m.group(1), m.group(2)
+        h1, h2 = m.group(1).strip(), m.group(2).strip()
         if not h1.endswith('h') and ':' not in h1 and len(h1) <= 2:
             h1 = f"{h1}:00"
         if not h2.endswith('h') and ':' not in h2 and len(h2) <= 2:
             h2 = f"{h2}:00"
         return f"Das {h1} às {h2}"
         
-    if "às" in s.lower() or "das" in s.lower():
-        return s
+    m_single = re.search(r'(\d{1,2}(?::\d{2})?(?:\s*h)?)', s)
+    if m_single:
+        h1 = m_single.group(1).strip()
+        if not h1.endswith('h') and ':' not in h1 and len(h1) <= 2:
+            h1 = f"{h1}:00"
+        return f"Das {h1} às 23:59"
         
-    return f"Das {s} às 23:59"
+    return s
 
 def verificar_cidade_segura(file_bytes, ext, df):
     if ext == "pdf" and file_bytes is not None:
@@ -229,30 +234,92 @@ def ler_arquivo_pdf(file_bytes):
                     row_clean = [str(cell).replace('\n', ' ').strip() if cell is not None else '' for cell in row]
                     if any(row_clean):
                         data.append(row_clean)
+
+        if not data:
+            file_bytes.seek(0)
+            for page in pdf.pages:
+                tables = page.extract_tables(table_settings={
+                    "vertical_strategy": "text",
+                    "horizontal_strategy": "text",
+                    "snap_tolerance": 5,
+                })
+                for table in tables:
+                    for row in table:
+                        row_clean = [str(cell).replace('\n', ' ').strip() if cell is not None else '' for cell in row]
+                        if any(row_clean):
+                            data.append(row_clean)
+
     if not data:
         return pd.DataFrame()
-    header_idx = 0
+
+    header_idx = -1
     for idx, row in enumerate(data):
         row_str = " ".join(row).upper()
-        if "VOLCHER" in row_str or "VOUCHER" in row_str or "CIDADE" in row_str or "DATA" in row_str or "N°" in row_str:
+        if any(term in row_str for term in ["VOLCHER", "VOUCHER", "CIDADE", "MUNICÍPIO", "MUNICIPIO", "DATA", "HORA", "HORÁRIO", "N°", "Nº"]):
             header_idx = idx
             break
-    headers = [str(h).strip() for h in data[header_idx]]
-    rows = data[header_idx + 1:]
-    return pd.DataFrame(rows, columns=headers)
+
+    if header_idx == -1:
+        headers = [f"COL_{i}" for i in range(len(data[0]))]
+        rows = data
+    else:
+        headers = [str(h).strip() if str(h).strip() else f"COL_{i}" for i, h in enumerate(data[header_idx])]
+        rows = data[header_idx + 1:]
+
+    rows_filtradas = []
+    for row in rows:
+        row_str = " ".join(row).upper()
+        if "VOLCHER" in row_str and "CIDADE" in row_str:
+            continue
+        if "VOUCHER" in row_str and "CIDADE" in row_str:
+            continue
+        if "N°" in row_str and "CIDADE" in row_str:
+            continue
+        rows_filtradas.append(row)
+
+    return pd.DataFrame(rows_filtradas, columns=headers)
 
 def processar_dataframe(df):
+    if df is None or df.empty:
+        return df, None, None, None, None
+
     cols = {str(c).upper().strip(): c for c in df.columns}
-    def encontrar_coluna(termos, df_cols):
+    
+    def normalizar(txt):
+        txt = str(txt).upper()
+        return re.sub(r'[ÁÀÂÃ]', 'A', re.sub(r'[ÉÈÊ]', 'E', re.sub(r'[ÍÌÎ]', 'I', re.sub(r'[ÓÒÔÕ]', 'O', re.sub(r'[ÚÙÛ]', 'U', txt)))))
+
+    def encontrar_coluna_por_nome(termos, df_cols):
         for termo in termos:
+            termo_norm = normalizar(termo)
             for col_upper, col_orig in df_cols.items():
-                if termo in col_upper:
+                col_norm = normalizar(col_upper)
+                if termo_norm in col_norm:
                     return col_orig
         return None
-    col_volcher = encontrar_coluna(["VOLCHER", "VOUCHER", "VOLCHE", "VOUCHE", "N°", "Nº"], cols)
-    col_cidade = encontrar_coluna(["CIDADE", "MUNICÍPIO", "LOCAL"], cols)
-    col_data = encontrar_coluna(["DATA", "DIA"], cols)
-    col_hora = encontrar_coluna(["HORA"], cols)
+
+    col_volcher = encontrar_coluna_por_nome(["VOLCHER", "VOUCHER", "VOLCHE", "VOUCHE", "N°", "Nº", "NUMERO", "NRO", "CODIGO", "CARTAO"], cols)
+    col_cidade = encontrar_coluna_por_nome(["CIDADE", "MUNICÍPIO", "MUNICIPIO", "LOCAL", "OPM", "MUNIC", "LOTAÇÃO", "POSTO"], cols)
+    col_data = encontrar_coluna_por_nome(["DATA", "DIA", "PERIODO"], cols)
+    col_hora = encontrar_coluna_por_nome(["HORA", "HORARIO", "TURNO", "PERIODO", "INICIO", "ESCALA", "SERVICO", "TEMPO"], cols)
+
+    # Fallback por CONTEÚDO da coluna
+    for col in df.columns:
+        sample_vals = [str(v) for v in df[col].dropna().head(10).tolist()]
+        sample_text = " ".join(sample_vals)
+        
+        if col_hora is None and col not in [col_volcher, col_cidade, col_data]:
+            if re.search(r'\b\d{1,2}(?::\d{2}|h)\b', sample_text, re.IGNORECASE) or "AS" in sample_text.upper() or "ÀS" in sample_text.upper():
+                col_hora = col
+
+        if col_volcher is None and col not in [col_cidade, col_data, col_hora]:
+            if any(re.search(r'^\d{1,5}$', v.strip()) for v in sample_vals):
+                col_volcher = col
+
+        if col_data is None and col not in [col_volcher, col_cidade, col_hora]:
+            if re.search(r'\b\d{1,2}/\d{1,2}/\d{2,4}\b', sample_text) or re.search(r'\b\d{4}-\d{2}-\d{2}\b', sample_text):
+                col_data = col
+
     return df, col_volcher, col_cidade, col_data, col_hora
 
 def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta-feira)", e_cidade_segura=False):
@@ -303,7 +370,11 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
 
     df, col_v, col_c, col_d, col_h = processar_dataframe(df_escala)
 
-    group_cols = [c for c in [col_v, col_c, col_d, col_h] if c is not None]
+    for c in [col_v, col_c, col_d, col_h]:
+        if c in df.columns:
+            df[c] = df[c].astype(str).str.strip()
+
+    group_cols = [c for c in [col_v, col_c, col_d, col_h] if c is not None and c in df.columns]
 
     if group_cols:
         grupos_iterator = df.groupby(group_cols, sort=False)
@@ -850,7 +921,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
+                if len(cels) > 1 and cels == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
@@ -885,7 +956,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
                         for c_idx, cell_value in enumerate(row_data):
                             if c_idx < len(row_cells):
                                 cell = row_cells[c_idx]
-                                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+                                p = cell.paragraphs if cell.paragraphs else cell.add_paragraph()
                                 p.paragraph_format.space_before = Pt(3)
                                 p.paragraph_format.space_after = Pt(3)
                                 p.paragraph_format.line_spacing = 1.15
@@ -953,14 +1024,14 @@ def gerar_ordem_servico_docx(fields):
     table_hdr.autofit = False
     table_hdr.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    row0 = table_hdr.rows[0]
-    cell_left = row0.cells[0]
-    cell_right = row0.cells[1]
+    row0 = table_hdr.rows
+    cell_left = row0.cells
+    cell_right = row0.cells
 
     cell_left.width = Inches(3.5)
     cell_right.width = Inches(3.0)
 
-    p_left = cell_left.paragraphs[0]
+    p_left = cell_left.paragraphs
     p_left.paragraph_format.space_after = Pt(2)
     p_left.paragraph_format.line_spacing = 1.2
     r_l = p_left.add_run("PMPR\n2º CRPM/18º BPM\nP/3")
@@ -968,7 +1039,7 @@ def gerar_ordem_servico_docx(fields):
     r_l.font.name = "Arial"
     r_l.font.size = Pt(10)
 
-    p_right = cell_right.paragraphs[0]
+    p_right = cell_right.paragraphs
     p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_right.paragraph_format.space_after = Pt(2)
     p_right.paragraph_format.line_spacing = 1.2
@@ -1061,7 +1132,7 @@ def renderizar_conteudo_pdf(story, conteudo, style_subnum, style_body, style_tab
             tabela_linhas = []
             while i < len(linhas) and '|' in linhas[i]:
                 cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
+                if len(cels) > 1 and cels == "":
                     cels = cels[1:]
                 if len(cels) > 1 and cels[-1] == "":
                     cels = cels[:-1]
