@@ -145,7 +145,7 @@ def formatar_data_para_tela_inicial(val_str):
             ano = dt.year
             dia_sem = DIAS_SEMANA[dt.weekday()]
             return f"{dia} de {mes} de {ano} ({dia_sem})"
-        except ValueError:
+        except (ValueError, TypeError):
             pass
     return str(val_str).strip()
 
@@ -358,7 +358,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
     return buffer
 
 def render_extrajornada():
-    col_back, _ = st.columns([1, 3])
+    col_back, _ = st.columns(2)
     with col_back:
         if st.button("⬅️ Voltar ao Início", key="btn_voltar_extrajornada"):
             st.session_state.pagina = "inicio"
@@ -1149,7 +1149,7 @@ def gerar_ordem_servico_pdf(fields):
     return buffer.getvalue()
 
 def render_ordem_servico():
-    col_back, _ = st.columns([1, 3])
+    col_back, _ = st.columns(2)
     with col_back:
         if st.button("⬅️ Voltar ao Início", key="btn_voltar_os"):
             st.session_state.pagina = "inicio"
@@ -1164,7 +1164,7 @@ def render_ordem_servico():
     st.caption("18º Batalhão de Polícia Militar — PMPR")
     st.write("Envie a **Ordem de Operação (OO)** para extração automática e geração da **Ordem de Serviço (OS)**.")
 
-    arquivo_oo = st.file_uploader("Envie o arquivo da Ordem de Operação (PDF ou DOCX)", type=["pdf", "docx", "doc"])
+    arquivo_oo = st.file_uploader("Envie a Ordem de Operação (PDF ou DOCX)", type=["pdf", "docx", "doc"])
     if arquivo_oo:
         texto_extraido = extrair_texto_arquivo(arquivo_oo)
         if texto_extraido.strip():
