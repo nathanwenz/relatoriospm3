@@ -227,26 +227,66 @@ def formatar_data_curta(val):
     return val_str
 
 def formatar_horario(hora_raw):
-    """Extrai estritamente o intervalo de horário, eliminando nomes de policiais ou patentes."""
+    """Extrai com precisão o intervalo de horário (ex: 'Das 18:00 às 02:00'), preservando fielmente o horário de término do PDF/escala."""
     if not hora_raw or str(hora_raw).strip().lower() in ['none', 'nan', '', 'null']:
         return "Das 18:00 às 23:59"
     
     s = str(hora_raw).strip()
     
-    m_range = re.search(r'(\d{1,2}(?::\d{2})?(?:\s*h)?)\s*(?:às|as|a|-|/|até|\s)\s*(\d{1,2}(?::\d{2})?(?:\s*h)?)', s, re.IGNORECASE)
-    if m_range:
-        h1, h2 = m_range.group(1).strip(), m_range.group(2).strip()
-        if not h1.endswith('h') and ':' not in h1 and len(h1) <= 2:
-            h1 = f"{h1}:00"
-        if not h2.endswith('h') and ':' not in h2 and len(h2) <= 2:
-            h2 = f"{h2}:00"
-        return f"Das {h1} às {h2}"
+    # 1. Remover datas (ex: 23/09/2026, 2026-09-23) para não confundir dia/mês/ano com horário
+    s = re.sub(r'\b\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4}\b', '', s)
+    
+    # 2. Se houver horários no formato 18:00HS ou 18:00H, remover as letras coladas após o ':'
+    s = re.sub(r'(\d{1,2}:\d{2})[a-zA-Z]+', r'\1', s)
+
+    # 3. Limpar sufixos comuns como hs, min, hrs, etc.
+    s_clean = re.sub(r'\b(minutos|min|mins|horas|hora|hrs|hs|m)\b', '', s, flags=re.IGNORECASE)
+
+    # 4. Encontrar tokens de horários principais (ex: 18:00, 18h00, 18h, 1800, ou números isolados)
+    raw_tokens = re.findall(r'(\d{1,2}:\d{2}|\d{1,2}[hH]\d{2}|\d{1,2}[hH]|\b\d{4}\b|\b\d{1,2}\b)', s_clean)
+    
+    def std_time(t):
+        t = t.strip()
+        m_h = re.match(r'^(\d{1,2})[hH](\d{2})?$', t)
+        if m_h:
+            h = m_h.group(1).zfill(2)
+            m = m_h.group(2) if m_h.group(2) else "00"
+            return f"{h}:{m}"
+        if ':' in t:
+            parts = t.split(':')
+            return f"{parts[0].zfill(2)}:{parts[1].zfill(2)}"
+        if len(t) == 4 and t.isdigit():
+            return f"{t[:2]}:{t[2:]}"
+        if len(t) <= 2 and t.isdigit():
+            return f"{t.zfill(2)}:00"
+        return t
+
+    valid_times = []
+    for t in raw_tokens:
+        t_str = t.strip()
+        if not t_str:
+            continue
+        if len(t_str) == 4 and t_str.isdigit():
+            val = int(t_str)
+            if 2020 <= val <= 2030: # ano
+                continue
+            if val > 2400 or int(t_str[2:]) > 59:
+                continue
+        elif ':' in t_str:
+            parts = t_str.split(':')
+            if int(parts[0]) > 24 or int(parts[1]) > 59:
+                continue
+        elif len(t_str) <= 2 and t_str.isdigit():
+            if int(t_str) > 24:
+                continue
+        valid_times.append(t_str)
         
-    m_single = re.search(r'(\d{1,2}(?::\d{2})?(?:\s*h)?)', s)
-    if m_single:
-        h1 = m_single.group(1).strip()
-        if not h1.endswith('h') and ':' not in h1 and len(h1) <= 2:
-            h1 = f"{h1}:00"
+    if len(valid_times) >= 2:
+        h1 = std_time(valid_times[0])
+        h2 = std_time(valid_times[1])
+        return f"Das {h1} às {h2}"
+    elif len(valid_times) == 1:
+        h1 = std_time(valid_times[0])
         return f"Das {h1} às 23:59"
         
     return "Das 18:00 às 23:59"
