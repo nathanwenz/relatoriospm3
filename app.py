@@ -153,14 +153,30 @@ if not st.session_state.autenticado:
 DIAS_SEMANA = { 0: "segunda-feira", 1: "terça-feira", 2: "quarta-feira", 3: "quinta-feira", 4: "sexta-feira", 5: "sábado", 6: "domingo" }
 MESES = { 1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril", 5: "maio", 6: "junho", 7: "julho", 8: "agosto", 9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro" }
 
-def formatar_data_para_tela_inicial(val_str):
-    if not val_str or str(val_str).strip().lower() in ['none', 'nan', '']:
+def formatar_data_extenso(val):
+    """Converte qualquer data (string 'dd/mm/yyyy', Timestamp ou date) para 'xx de mês de ano (dia-da-semana)'."""
+    if val is None or pd.isna(val):
         return "23 de setembro de 2026 (quarta-feira)"
-    parts = str(val_str).strip().split()
-    s = parts if parts else ""
-    for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y"]:
+    
+    if isinstance(val, (pd.Timestamp, datetime)):
+        dia = val.day
+        mes = MESES[val.month]
+        ano = val.year
+        dia_sem = DIAS_SEMANA[val.weekday()]
+        return f"{dia} de {mes} de {ano} ({dia_sem})"
+    
+    val_str = str(val).strip()
+    if not val_str or val_str.lower() in ['none', 'nan', '', 'null']:
+        return "23 de setembro de 2026 (quarta-feira)"
+        
+    if " de " in val_str.lower() and ("feira" in val_str.lower() or "sábado" in val_str.lower() or "domingo" in val_str.lower()):
+        return val_str
+
+    s_clean = val_str.split()[0] if val_str.split() else val_str
+    
+    for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%Y/%m/%d"]:
         try:
-            dt = datetime.strptime(s, fmt)
+            dt = datetime.strptime(s_clean, fmt)
             dia = dt.day
             mes = MESES[dt.month]
             ano = dt.year
@@ -168,7 +184,8 @@ def formatar_data_para_tela_inicial(val_str):
             return f"{dia} de {mes} de {ano} ({dia_sem})"
         except (ValueError, TypeError):
             pass
-    return str(val_str).strip()
+            
+    return val_str
 
 def formatar_horario(hora_raw):
     """Extrai estritamente o intervalo de horário, eliminando nomes de policiais ou patentes."""
@@ -177,7 +194,6 @@ def formatar_horario(hora_raw):
     
     s = str(hora_raw).strip()
     
-    # Busca por padrão de dois horários (ex: 12:00 as 17:59, 13:00 - 19:00, 12h às 18h)
     m_range = re.search(r'(\d{1,2}(?::\d{2})?(?:\s*h)?)\s*(?:às|as|a|-|/|até|\s)\s*(\d{1,2}(?::\d{2})?(?:\s*h)?)', s, re.IGNORECASE)
     if m_range:
         h1, h2 = m_range.group(1).strip(), m_range.group(2).strip()
@@ -187,7 +203,6 @@ def formatar_horario(hora_raw):
             h2 = f"{h2}:00"
         return f"Das {h1} às {h2}"
         
-    # Busca por padrão de um horário único inicial (ex: 12:00, 18h)
     m_single = re.search(r'(\d{1,2}(?::\d{2})?(?:\s*h)?)', s)
     if m_single:
         h1 = m_single.group(1).strip()
@@ -260,7 +275,7 @@ def ler_arquivo_pdf(file_bytes):
             break
 
     if header_idx == -1:
-        headers = [f"COL_{i}" for i in range(len(data[0]))] if data else []
+        headers = [f"COL_{i}" for i in range(len(data))] if data else []
         rows = data
     else:
         headers = [str(h).strip() if str(h).strip() else f"COL_{i}" for i, h in enumerate(data[header_idx])]
@@ -289,7 +304,6 @@ def processar_dataframe(df):
         txt = str(txt).upper()
         return re.sub(r'[ÁÀÂÃ]', 'A', re.sub(r'[ÉÈÊ]', 'E', re.sub(r'[ÍÌÎ]', 'I', re.sub(r'[ÓÒÔÕ]', 'O', re.sub(r'[ÚÙÛ]', 'U', txt)))))
 
-    # Excluir estritamente colunas que sejam de nomes de policiais
     termos_policial = ["NOME", "POLICIAL", "EFETIVO", "GRADUACAO", "POSTO", "GRAD", "PM", "MILITAR", "INTEGRANTE", "RG", "CPF", "MATRICULA", "CONTATO", "TELEFONE", "RESPONSAVEL", "SERVIDOR"]
 
     def e_coluna_policial(col_nome):
@@ -312,7 +326,6 @@ def processar_dataframe(df):
     col_data = encontrar_coluna_por_nome(["DATA", "DIA", "PERIODO"], cols, ignorar_policial=True)
     col_hora = encontrar_coluna_por_nome(["HORA", "HORARIO", "TURNO", "PERIODO", "INICIO", "ESCALA", "SERVICO", "TEMPO"], cols, ignorar_policial=True)
 
-    # Fallback por CONTEÚDO da coluna (ignorando colunas de nomes de policiais)
     for col in df.columns:
         if e_coluna_policial(col):
             continue
@@ -365,10 +378,13 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         r_cs.font.name = "Arial"
         r_cs.font.color.rgb = RGBColor(0, 32, 96)
 
+    # Garante que a data do cabeçalho principal esteja no formato por extenso
+    data_cabecalho_formatada = formatar_data_extenso(data_extenso)
+
     p_data = doc.add_paragraph()
     p_data.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_data.paragraph_format.space_after = Pt(6)
-    r_dt = p_data.add_run(data_extenso)
+    r_dt = p_data.add_run(data_cabecalho_formatada)
     r_dt.bold = True
     r_dt.font.size = Pt(11)
     r_dt.font.name = "Arial"
@@ -405,7 +421,10 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 (quarta
         volcher_val = volcher_raw if volcher_raw else str(group_idx + 1)
 
         cidade_val = str(primeiro.get(col_c, "")).replace('None', '').replace('nan', '').strip() if col_c else ""
-        data_str = str(primeiro.get(col_d, "23/09/2026")).strip() if col_d else "23/09/2026"
+        
+        # Garante que a data dentro da tabela do card também fique por extenso
+        data_raw = str(primeiro.get(col_d, "")).strip() if col_d else ""
+        data_str = formatar_data_extenso(data_raw) if data_raw else data_cabecalho_formatada
 
         hora_raw = str(primeiro.get(col_h, "")).strip() if col_h else ""
         hora_str = formatar_horario(hora_raw)
@@ -522,8 +541,8 @@ def render_extrajornada():
             _, _, _, col_d, _ = processar_dataframe(df)
             data_sugerida_tela = "23 de setembro de 2026 (quarta-feira)"
             if col_d and col_d in df.columns and not df[col_d].dropna().empty:
-                primeira_data_val = str(df[col_d].dropna().iloc[0]).strip()
-                data_sugerida_tela = formatar_data_para_tela_inicial(primeira_data_val)
+                primeira_data_val = df[col_d].dropna().iloc[0]
+                data_sugerida_tela = formatar_data_extenso(primeira_data_val)
 
             data_cabecalho = st.text_input("Data para o cabeçalho do relatório", value=data_sugerida_tela)
             
@@ -968,7 +987,7 @@ def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
                         for c_idx, cell_value in enumerate(row_data):
                             if c_idx < len(row_cells):
                                 cell = row_cells[c_idx]
-                                p = cell.paragraphs if cell.paragraphs else cell.add_paragraph()
+                                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
                                 p.paragraph_format.space_before = Pt(3)
                                 p.paragraph_format.space_after = Pt(3)
                                 p.paragraph_format.line_spacing = 1.15
@@ -1036,7 +1055,7 @@ def gerar_ordem_servico_docx(fields):
     table_hdr.autofit = False
     table_hdr.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    row0 = table_hdr.rows
+    row0 = table_hdr.rows[0]
     cell_left = row0.cells[0]
     cell_right = row0.cells[1]
 
