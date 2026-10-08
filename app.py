@@ -214,7 +214,7 @@ def formatar_data_extenso(val):
         except ValueError:
             pass
 
-    s_clean = val_str.split()[0] if val_str.split() else val_str
+    s_clean = val_str.split() if val_str.split() else val_str
     for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%Y/%m/%d"]:
         try:
             dt = datetime.strptime(s_clean, fmt)
@@ -252,7 +252,7 @@ def formatar_data_curta(val):
             mes_num = str(MESES_REV[mes_nome]).zfill(2)
             return f"{dia}/{mes_num}/{ano}"
 
-    s_clean = val_str.split()[0] if val_str.split() else val_str
+    s_clean = val_str.split() if val_str.split() else val_str
     for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%Y/%m/%d"]:
         try:
             dt = datetime.strptime(s_clean, fmt)
@@ -915,7 +915,7 @@ def add_p_docx(doc, text, bold_prefix=None, space_before=2, space_after=5, line_
         r_pre.font.name = "Arial"
         r_pre.font.size = Pt(font_size)
 
-    pattern = r'(<hl>.*?</hl>|\bXX\b|\bYY\b|\bZZ\b|\bZZZ\b|\bxx-xx\b|\bdia da semana\b)'
+    pattern = r'(<hl>.*?</hl>|\bXX\b|\bYY\b|\bZZ\b|\bZZZ\b|\bMÊS\b|\bMES\b|\bxx-xx\b|\bdia da semana\b)'
     tokens = re.split(pattern, text, flags=re.IGNORECASE)
 
     for token in tokens:
@@ -926,7 +926,7 @@ def add_p_docx(doc, text, bold_prefix=None, space_before=2, space_after=5, line_
         if token.lower().startswith("<hl>") and token.lower().endswith("</hl>"):
             is_hl = True
             clean_tok = token[4:-5]
-        elif token.upper() in ["XX", "YY", "ZZ", "ZZZ", "XX-XX", "DIA DA SEMANA"]:
+        elif token.upper() in ["XX", "YY", "ZZ", "ZZZ", "MÊS", "MES", "XX-XX", "DIA DA SEMANA"]:
             is_hl = True
 
         r = p.add_run(clean_tok)
@@ -1036,7 +1036,7 @@ def gerar_ordem_servico_docx(fields):
 
     # 6. ADMINISTRAÇÃO/LOGÍSTICA
     add_p_docx(doc, "6. ADMINISTRAÇÃO/LOGÍSTICA", is_sec_title=True)
-    add_p_docx(doc, "Apresentação da tropa em local e horário determinados, com controle de presença e conferência de materiais.", bold_prefix="6.1 PESSOA: ")
+    add_p_docx(doc, "Apresentação da tropa em local e horário determinados, com controle de presença e conferência de materiais.", bold_prefix="6.1 PESSOAL: ")
     add_p_docx(doc, "A cargo da P/4 das respectivas OPMs, utilizando as viaturas operacionais caracterizadas com giroflex acionado.", bold_prefix="6.2 TRANSPORTES: ")
     add_p_docx(doc, "Uniforme orgânico da OPM (4º RUPM), cinto de guarnição completo, colete balístico, rádio HT e armamento portátil disponível.", bold_prefix="6.3 UNIFORME, EQUIPAMENTOS E ARMAMENTO: ")
     add_p_docx(doc, "Registro de imagem e imprensa a cargo da P/5 da OPM.", bold_prefix="6.4 COMUNICAÇÃO SOCIAL: ")
@@ -1044,7 +1044,14 @@ def gerar_ordem_servico_docx(fields):
     # 7. RELATÓRIO
     add_p_docx(doc, "7. RELATÓRIO", is_sec_title=True)
     num_sisg = fields.get('num_sisgcop', '63.447')
-    add_p_docx(doc, f"Deverá ser feito o registro no SISGCOP até às 08h30min do dia subsequente da Operação. O Relatório deverá ser vinculado à Operação nº {num_sisg} - “{fields.get('nome_operacao', '').strip().upper()}”. Fica proibida a criação de cadastros paralelos com o mesmo nome.")
+    nome_op_str = fields.get('nome_operacao', '').strip().upper()
+
+    add_p_docx(doc, "Deverá ser elaborado relatório diário das atividades a serem desenvolvidas, mediante cadastro no SISGCOP, conforme segue:")
+    add_p_docx(doc, "Relatório das ações realizadas, constando todas as informações decorrentes do serviço desenvolvido;", bold_prefix="• ")
+    add_p_docx(doc, f"O relatório de serviço deverá ser vinculado à operação {num_sisg} – OPERAÇÃO “{nome_op_str}”, a qual já foi cadastrada pela GGOp/SUBCG;", bold_prefix="• ")
+    add_p_docx(doc, "O relatório da operação deverá ser inserido no SISGCOP logo após o término das ações policiais, sendo que os relatórios do período diurno do dia XX de MÊS de 2026 deverão ser inseridos no SISGCOP logo após o término dos cumprimentos de mandados e as ações dos dias XX e YY de MÊS de 2026, realizadas nos períodos vespertino e noturno não devendo exceder às 23h do dia da operação;", bold_prefix="• ")
+    add_p_docx(doc, "Fica a cargo do comandante da Operação a coleta e registro das ações realizadas no Relatório SISGCOP.", bold_prefix="• ")
+    add_p_docx(doc, "A P/3 para acompanhar o preenchimento dos registros dos relatórios no SISGCOP, não devendo o término exceder às 23h59min do dia da operação.", bold_prefix="• ")
 
     # 8. PRESCRIÇÕES DIVERSAS
     add_p_docx(doc, "8. PRESCRIÇÕES DIVERSAS", is_sec_title=True)
@@ -1079,9 +1086,8 @@ def gerar_ordem_servico_docx(fields):
     return buffer.getvalue()
 
 def text_to_pdf_html(text):
-    clean = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-    clean = clean.replace('&lt;hl&gt;', '<font backcolor="yellow"><b>').replace('&lt;/hl&gt;', '</b></font>')
-    pattern = r'(\bXX\b|\bYY\b|\bZZ\b|\bZZZ\b|\bxx-xx\b|\bdia da semana\b)'
+    clean = text.replace('&', '&amp;')
+    pattern = r'(\bXX\b|\bYY\b|\bZZ\b|\bZZZ\b|\bMÊS\b|\bMES\b|\bxx-xx\b|\bdia da semana\b)'
     def repl(m):
         return f'<font backcolor="yellow"><b>{m.group(1)}</b></font>'
     clean = re.sub(pattern, repl, clean, flags=re.IGNORECASE)
@@ -1172,7 +1178,7 @@ def gerar_ordem_servico_pdf(fields):
 
     # 6. ADMINISTRAÇÃO/LOGÍSTICA
     story.append(Paragraph("6. ADMINISTRAÇÃO/LOGÍSTICA", style_sec_title))
-    story.append(Paragraph(text_to_pdf_html("<b>6.1 PESSOA:</b> Apresentação da tropa em local e horário determinados, com controle de presença e conferência de materiais."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>6.1 PESSOAL:</b> Apresentação da tropa em local e horário determinados, com controle de presença e conferência de materiais."), style_body))
     story.append(Paragraph(text_to_pdf_html("<b>6.2 TRANSPORTES:</b> A cargo da P/4 das respectivas OPMs, utilizando as viaturas operacionais caracterizadas com giroflex acionado."), style_body))
     story.append(Paragraph(text_to_pdf_html("<b>6.3 UNIFORME, EQUIPAMENTOS E ARMAMENTO:</b> Uniforme orgânico da OPM (4º RUPM), cinto de guarnição completo, colete balístico, rádio HT e armamento portátil disponível."), style_body))
     story.append(Paragraph(text_to_pdf_html("<b>6.4 COMUNICAÇÃO SOCIAL:</b> Registro de imagem e imprensa a cargo da P/5 da OPM."), style_body))
@@ -1180,7 +1186,14 @@ def gerar_ordem_servico_pdf(fields):
     # 7. RELATÓRIO
     story.append(Paragraph("7. RELATÓRIO", style_sec_title))
     num_sisg = fields.get('num_sisgcop', '63.447')
-    story.append(Paragraph(text_to_pdf_html(f"Deverá ser feito o registro no SISGCOP até às 08h30min do dia subsequente da Operação. O Relatório deverá ser vinculado à Operação nº {num_sisg} - “{fields.get('nome_operacao', '').strip().upper()}”. Fica proibida a criação de cadastros paralelos com o mesmo nome."), style_body))
+    nome_op_str = fields.get('nome_operacao', '').strip().upper()
+
+    story.append(Paragraph(text_to_pdf_html("Deverá ser elaborado relatório diário das atividades a serem desenvolvidas, mediante cadastro no SISGCOP, conforme segue:"), style_body))
+    story.append(Paragraph(text_to_pdf_html("• Relatório das ações realizadas, constando todas as informações decorrentes do serviço desenvolvido;"), style_body))
+    story.append(Paragraph(text_to_pdf_html(f"• O relatório de serviço deverá ser vinculado à operação {num_sisg} – OPERAÇÃO “{nome_op_str}”, a qual já foi cadastrada pela GGOp/SUBCG;"), style_body))
+    story.append(Paragraph(text_to_pdf_html("• O relatório da operação deverá ser inserido no SISGCOP logo após o término das ações policiais, sendo que os relatórios do período diurno do dia XX de MÊS de 2026 deverão ser inseridos no SISGCOP logo após o término dos cumprimentos de mandados e as ações dos dias XX e YY de MÊS de 2026, realizadas nos períodos vespertino e noturno não devendo exceder às 23h do dia da operação;"), style_body))
+    story.append(Paragraph(text_to_pdf_html("• Fica a cargo do comandante da Operação a coleta e registro das ações realizadas no Relatório SISGCOP."), style_body))
+    story.append(Paragraph(text_to_pdf_html("• A P/3 para acompanhar o preenchimento dos registros dos relatórios no SISGCOP, não devendo o término exceder às 23h59min do dia da operação."), style_body))
 
     # 8. PRESCRIÇÕES DIVERSAS
     story.append(Paragraph("8. PRESCRIÇÕES DIVERSAS", style_sec_title))
