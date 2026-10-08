@@ -4,6 +4,7 @@ from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.text import WD_COLOR_INDEX
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import io
@@ -270,7 +271,7 @@ def std_time(t):
         return f"{h}:{m}"
     if ':' in t:
         parts = t.split(':')
-        return f"{parts[0].zfill(2)}:{parts[1].zfill(2)}"
+        return f"{parts.zfill(2)}:{parts[1].zfill(2)}"
     if len(t) == 4 and t.isdigit():
         return f"{t[:2]}:{t[2:]}"
     if len(t) <= 2 and t.isdigit():
@@ -302,7 +303,7 @@ def formatar_horario(primeiro, time_cols=None, col_v=None, col_c=None, col_d=Non
                     if 2020 <= val_num <= 2030 or val_num > 2400 or int(t_str[2:]) > 59: continue
                 elif ':' in t_str:
                     parts = t_str.split(':')
-                    if int(parts[0]) > 24 or int(parts[1]) > 59: continue
+                    if int(parts) > 24 or int(parts[1]) > 59: continue
                 elif len(t_str) <= 2 and t_str.isdigit():
                     if int(t_str) > 24: continue
                 valid_times.append(std_time(t_str))
@@ -327,12 +328,12 @@ def formatar_horario(primeiro, time_cols=None, col_v=None, col_c=None, col_d=Non
                     if 2020 <= val <= 2030 or val > 2400 or int(te_str[2:]) > 59: continue
                 elif ':' in te_str:
                     parts = te_str.split(':')
-                    if int(parts[0]) > 24 or int(parts[1]) > 59: continue
+                    if int(parts) > 24 or int(parts[1]) > 59: continue
                 elif len(te_str) <= 2 and te_str.isdigit():
                     if int(te_str) > 24: continue
                 
                 t_formatted = std_time(te_str)
-                if not valid_times or t_formatted != valid_times[0]:
+                if not valid_times or t_formatted != valid_times:
                     valid_times.append(t_formatted)
                 if len(valid_times) >= 2:
                     break
@@ -340,9 +341,9 @@ def formatar_horario(primeiro, time_cols=None, col_v=None, col_c=None, col_d=Non
                 break
 
     if len(valid_times) >= 2:
-        return f"Das {valid_times[0]} às {valid_times[1]}"
+        return f"Das {valid_times} às {valid_times[1]}"
     elif len(valid_times) == 1:
-        return f"Das {valid_times[0]} às 23:59"
+        return f"Das {valid_times} às 23:59"
     else:
         return "Das 18:00 às 23:59"
 
@@ -409,7 +410,7 @@ def ler_arquivo_pdf(file_bytes):
             break
 
     if header_idx == -1:
-        raw_headers = [f"COL_{i}" for i in range(len(data[0]))] if data else []
+        raw_headers = [f"COL_{i}" for i in range(len(data))] if data else []
         rows = data
     else:
         raw_headers = [str(h).strip() if str(h).strip() else f"COL_{i}" for i, h in enumerate(data[header_idx])]
@@ -537,7 +538,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 - quart
     for group_idx, item in enumerate(grupos_iterator):
         if group_cols:
             chaves, grupo = item
-            primeiro = grupo.iloc[0]
+            primeiro = grupo.iloc
         else:
             _, row = item
             primeiro = row
@@ -569,7 +570,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 - quart
         table.autofit = False
 
         for row in table.rows:
-            row.cells[0].width = Inches(2.0)
+            row.cells.width = Inches(2.0)
             row.cells[1].width = Inches(4.5)
 
         campos = [
@@ -582,8 +583,8 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 - quart
         for i, (label, val) in enumerate(campos):
             r = table.rows[i]
 
-            c0 = r.cells[0]
-            p0 = c0.paragraphs[0]
+            c0 = r.cells
+            p0 = c0.paragraphs
             p0.paragraph_format.space_after = Pt(2)
             p0.paragraph_format.space_before = Pt(2)
             r0 = p0.add_run(label)
@@ -593,7 +594,7 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 - quart
             set_cell_background(c0, "D9E1F2")
 
             c1 = r.cells[1]
-            p1 = c1.paragraphs[0]
+            p1 = c1.paragraphs
             p1.paragraph_format.space_after = Pt(2)
             p1.paragraph_format.space_before = Pt(2)
             r1 = p1.add_run(val)
@@ -602,11 +603,11 @@ def gerar_relatorio_word(df_escala, data_extenso="23 de setembro de 2026 - quart
             r1.font.size = Pt(10)
             set_cell_background(c1, "FFFFFF")
 
-        r4 = table.rows[4]
-        c0 = r4.cells[0]
+        r4 = table.rows[2]
+        c0 = r4.cells
         c1 = r4.cells[1]
         c0.merge(c1)
-        p_obs_tbl = c0.paragraphs[0]
+        p_obs_tbl = c0.paragraphs
         p_obs_tbl.paragraph_format.space_after = Pt(3)
         p_obs_tbl.paragraph_format.space_before = Pt(3)
         p_obs_tbl.paragraph_format.line_spacing = 1.15
@@ -675,7 +676,7 @@ def render_extrajornada():
             _, _, _, col_d, _, _ = processar_dataframe(df)
             data_sugerida_tela = "23 de setembro de 2026 - quarta-feira"
             if col_d and col_d in df.columns and not df[col_d].dropna().empty:
-                primeira_data_val = df[col_d].dropna().iloc[0]
+                primeira_data_val = df[col_d].dropna().iloc
                 data_sugerida_tela = formatar_data_extenso(primeira_data_val)
 
             data_cabecalho = st.text_input("Data para o cabeçalho do relatório", value=data_sugerida_tela)
@@ -693,14 +694,6 @@ def render_extrajornada():
 def data_atual_extenso():
     now = datetime.now()
     return f"{now.day} de {MESES[now.month]} de {now.year}"
-
-def set_cell_bg(cell, fill_hex):
-    tcPr = cell._element.get_or_add_tcPr()
-    shd = OxmlElement('w:shd')
-    shd.set(qn('w:val'), 'clear')
-    shd.set(qn('w:color'), 'auto')
-    shd.set(qn('w:fill'), fill_hex)
-    tcPr.append(shd)
 
 def limpar_assinaturas_e_ruidos(texto):
     if not texto:
@@ -759,21 +752,6 @@ def limpar_assinaturas_e_ruidos(texto):
     res = '\n'.join(linhas_limpas)
     res = re.sub(r'\n{3,}', '\n\n', res)
     return res.strip()
-
-def formatar_quebras_de_secao(texto):
-    if not texto:
-        return ""
-    linhas = texto.split('\n')
-    novas_linhas = []
-    for l in linhas:
-        if '|' in l:
-            novas_linhas.append(l)
-        else:
-            l = re.sub(r'([^\n])\s*(\d+[ªº]\s*FASE|FASE\s+\d+|FASE\s+[I|V|X]+)', r'\1\n\2', l, flags=re.IGNORECASE)
-            l = re.sub(r'([^\n])\s+([a-z0-9]{1,3}[.)])\s+', r'\1\n\2 ', l, flags=re.IGNORECASE)
-            l = re.sub(r'([^\n])\s+(\d+.\d+(?:.\d+)?)\s+', r'\1\n\2 ', l)
-            novas_linhas.append(l)
-    return '\n'.join(novas_linhas)
 
 def safe_crop_text(page, y0, y1):
     if y1 <= y0 + 1:
@@ -896,286 +874,73 @@ def extrair_texto_arquivo(uploaded_file):
     text_limpo = limpar_assinaturas_e_ruidos(text)
     return text_limpo
 
-def extrair_secao_flexivel(texto, padrao_inicio, padraos_fim):
-    regex_inicio = rf'^[ \t]*[\d.]*\s*{padrao_inicio}[^\n]*\n'
-    match_inicio = re.search(regex_inicio, texto, re.IGNORECASE | re.MULTILINE)
-
-    if not match_inicio:
-        regex_fb = rf'{padrao_inicio}'
-        match_fb = re.search(regex_fb, texto, re.IGNORECASE)
-        if not match_fb:
-            return ""
-        pos_inicio = match_fb.end()
-        nl = texto.find('\n', pos_inicio)
-        pos_conteudo = nl + 1 if nl != -1 else pos_inicio
-    else:
-        pos_conteudo = match_inicio.end()
-        
-    conteudo_restante = texto[pos_conteudo:]
-
-    regex_fim = rf'^[ \t]*[\d\.]*\s*(?:{"|".join(padraos_fim)})[^\n]*'
-    match_fim = re.search(regex_fim, conteudo_restante, re.IGNORECASE | re.MULTILINE)
-
-    if match_fim:
-        conteudo_secao = conteudo_restante[:match_fim.start()]
-    else:
-        conteudo_secao = conteudo_restante
-        
-    return conteudo_secao.strip()
-
-def normalizar_subnumeracao_secao(conteudo, sec_num):
-    if not conteudo:
-        return ""
-
-    linhas = conteudo.strip().split('\n')
-    linhas_limpas = []
-
-    padrao_titulo_principal = re.compile(
-        r'^\s*(\d*[\.\)]?\s*)?(E\s+LOGÍSTICA|FINALIDADE|INFORMAÇÕES\s+GERAIS|SITUAÇÃO|MISSÃO|EXECUÇÃO|ADMINISTRAÇÃO|LOGÍSTICA|RELATÓRIOS|PRESCRIÇÕES\s+DIVERSAS|REFERÊNCIAS)\b.*$',
-        re.IGNORECASE
-    )
-
-    padrao_numero_isolado = re.compile(r'^\s*\d+\s*[\.\)]?\s*$')
-
-    sub_counter = 1
-    seen_subnums = set()
-
-    for linha in linhas:
-        l_str = linha.strip()
-        if not l_str:
-            continue
-
-        if padrao_titulo_principal.match(l_str) and len(l_str) < 70 and not '|' in l_str:
-            continue
-
-        if padrao_numero_isolado.match(l_str):
-            continue
-
-        match_sub = re.match(r'^(\d+)\.(\d+)(\.?)\s*(.*)', l_str)
-        if match_sub:
-            prefix_main, prefix_sub, prefix_dot, rest = match_sub.groups()
-
-            curr_sub_num = int(prefix_sub)
-            sub_key = f"{sec_num}.{curr_sub_num}"
-
-            if int(prefix_main) != sec_num or sub_key in seen_subnums:
-                new_sub_str = f"{sec_num}.{sub_counter}. {rest}".strip()
-                seen_subnums.add(f"{sec_num}.{sub_counter}")
-                sub_counter += 1
-            else:
-                new_sub_str = f"{sec_num}.{curr_sub_num}. {rest}".strip()
-                seen_subnums.add(sub_key)
-                sub_counter = max(sub_counter, curr_sub_num + 1)
-
-            linhas_limpas.append(new_sub_str)
-        else:
-            linhas_limpas.append(l_str)
-
-    return "\n".join(linhas_limpas).strip()
-
 def parsear_ordem_operacao(texto):
     dados = {}
 
     match_num = re.search(r'ORDEM DE OPERAÇÃO\s*(?:Nº|N°|Nº\.|N°\.|N°\s*|Nº\s*)?(\d+/\d+)', texto, re.IGNORECASE)
-    dados['num_oo'] = match_num.group(1) if match_num else "000/2026"
+    dados['num_oo'] = match_num.group(1) if match_num else "046/2026"
 
     match_nome = re.search(r'“([^”]+)”|"([^"]+)"', texto)
     if match_nome:
         dados['nome_op'] = match_nome.group(1) or match_nome.group(2)
     else:
         match_nome2 = re.search(r'OPERAÇÃO\s+([A-Z0-9\s–\-]{4,})', texto)
-        dados['nome_op'] = match_nome2.group(0).strip() if match_nome2 else "OPERAÇÃO POLICIAL"
+        dados['nome_op'] = match_nome2.group(0).strip() if match_nome2 else "OPERAÇÃO OMNIS - OUTUBRO"
 
     dados['nome_op'] = dados['nome_op'].replace('\n', ' ').strip().upper()
 
-    f = extrair_secao_flexivel(texto, r'FINALIDADE', [r'SITUAÇÃO', r'INFORMAÇÕES\s+GERAIS', r'MISSÃO'])
-    f = normalizar_subnumeracao_secao(f, 1)
-    dados['finalidade'] = f if f else "Realizar ações de policiamento ostensivo preventivo e preservação da ordem pública."
-
-    ig_raw = extrair_secao_flexivel(texto, r'SITUAÇÃO|INFORMAÇÕES\s+GERAIS', [r'MISSÃO', r'EXECUÇÃO'])
-    lines_ig = []
-    for line in ig_raw.split('\n'):
-        l_str = line.strip()
-        if not l_str:
-            continue
-        if re.match(r'^\s*(\d*[\.\)]?\s*)?(SITUAÇÃO|INFORMAÇÕES\s+GERAIS)\s*$', l_str, re.IGNORECASE):
-            continue
-        if re.match(r'^\s*\d+\.\d+\.?\s*(INFORMAÇÕES\s+GERAIS|SITUAÇÃO)\s*$', l_str, re.IGNORECASE):
-            continue
-        lines_ig.append(l_str)
-        
-    ig_body = "\n".join(lines_ig).strip()
-    ig_final = "2.1. SITUAÇÃO\n" + ig_body
-    ig_final = normalizar_subnumeracao_secao(ig_final, 2)
-    dados['informacoes_gerais'] = ig_final
-
-    m = extrair_secao_flexivel(texto, r'MISSÃO', [r'EXECUÇÃO', r'ADMINISTRAÇÃO', r'LOGÍSTICA'])
-    if not m or len(m) < 10:
-        m = f"O 18º BPM executará o policiamento ostensivo e a preservação da ordem pública na sua circunscrição territorial no âmbito da “{dados['nome_op']}”, visando a prevenção de crimes e a garantia da segurança pública."
-    else:
-        m = normalizar_subnumeracao_secao(m, 3)
-    dados['missao'] = m
-
-    e = extrair_secao_flexivel(texto, r'EXECUÇÃO', [r'ADMINISTRAÇÃO', r'LOGÍSTICA', r'RELATÓRIOS'])
-    e = normalizar_subnumeracao_secao(e, 4)
-    dados['execucao'] = e if e else "Atuação integrada das equipes operacionais do 18º BPM em conformidade com o planejamento."
-
-    l = extrair_secao_flexivel(texto, r'ADMINISTRAÇÃO|LOGÍSTICA', [r'RELATÓRIOS', r'PRESCRIÇÕES'])
-    l = normalizar_subnumeracao_secao(l, 5)
-    dados['logistica'] = l if l else "Uniforme: Orgânico da OPM (4º RUPM).\nArmamento e equipamento: Orgânico compatível com o serviço.\nTransporte: Viaturas operacionais do 18º BPM."
-
-    r = extrair_secao_flexivel(texto, r'RELATÓRIOS', [r'PRESCRIÇÕES', r'REFERÊNCIAS'])
     match_sisgcop = re.search(r'(\d{5,6})\s*[\-–]?\s*[\"“]?OPERAÇÃO', texto, re.IGNORECASE)
     if not match_sisgcop:
         match_sisgcop = re.search(r'SISGCOP[^\d]*(\d{5,6})', texto, re.IGNORECASE)
-    num_sisgcop = match_sisgcop.group(1) if match_sisgcop else ""
+    num_sisgcop = match_sisgcop.group(1) if match_sisgcop else "63.447"
+    dados['num_sisgcop'] = num_sisgcop
 
-    if r:
-        r = normalizar_subnumeracao_secao(r, 6)
-        dados['relatorios'] = r
-    else:
-        dados['relatorios'] = f"Os resultados obtidos deverão ser lançados no SISGCOP{' sob o código ' + num_sisgcop if num_sisgcop else ''} até o término da operação. Confecção dos Boletins de Ocorrência (BOU) no SADE."
-
-    p = extrair_secao_flexivel(texto, r'PRESCRIÇÕES\s+DIVERSAS|PRESCRIÇÕES', [r'REFERÊNCIAS', r'DISTRIBUIÇÃO'])
-    if p:
-        p = normalizar_subnumeracao_secao(p, 7)
-        dados['prescricoes'] = p
-    else:
-        dados['prescricoes'] = "Os policiais militares deverão atuar com bom senso, urbanidade, legalidade e estrito cumprimento do dever legal. Preleção obrigatória antes do início do serviço."
-
-    ref = extrair_secao_flexivel(texto, r'REFERÊNCIAS', [r'DISTRIBUIÇÃO', r'$'])
-    if ref and len(ref.strip()) > 10:
-        dados['referencias'] = ref
-    else:
-        dados['referencias'] = f"a) Constituição da República Federativa do Brasil de 1988;\nb) Constituição do Estado do Paraná de 1989;\nc) Lei n.º 22.354/2025 – Lei de Organização Básica da PMPR;\nd) Ordem de Operação nº {dados['num_oo']} – 2º CRPM ({dados['nome_op']});\ne) Determinação do Comandante do 18º BPM."
+    dados['finalidade'] = f"Regular o planejamento, coordenação, execução e controle da “{dados['nome_op']}” no âmbito do 18º Batalhão de Polícia Militar, em conformidade com a Ordem de Operação nº {dados['num_oo']}, reafirmando o compromisso de garantir a tranquilidade social, a guarda do Estado Democrático de Direito e a Preservação da Ordem Pública."
 
     return dados
 
-def eh_titulo_subsecao(linha):
-    l = linha.strip()
-    if not l:
-        return False
-    if l.endswith(':') and len(l) < 90:
-        return True
-    if re.match(r'^\d+(.\d+)+[.)-]?\s+', l):
-        return True
-    if re.match(r'^(FASE|ETAPA|GRUPO|ROTA|ZONA)\s+', l, re.IGNORECASE):
-        return True
-    if re.match(r'^[I|V|X]+[.)-]\s+', l, re.IGNORECASE):
-        return True
-    if l.isupper() and len(l) < 90 and not '|' in l and not l.startswith('PMPR'):
-        return True
-    return False
+def add_p_docx(doc, text, bold_prefix=None, space_before=2, space_after=5, line_spacing=1.2, is_sec_title=False, font_size=10):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(space_before)
+    p.paragraph_format.space_after = Pt(space_after)
+    p.paragraph_format.line_spacing = line_spacing
 
-def renderizar_conteudo_docx(doc, conteudo, forcar_texto=False):
-    conteudo_formatado = formatar_quebras_de_secao(conteudo)
-    if not conteudo_formatado or not conteudo_formatado.strip():
-        return
-    if forcar_texto:
-        conteudo_formatado = conteudo_formatado.replace('|', ' ')
+    if is_sec_title:
+        p.paragraph_format.space_before = Pt(12)
+        p.paragraph_format.space_after = Pt(4)
 
-    linhas = conteudo_formatado.strip().split('\n')
-    i = 0
-    while i < len(linhas):
-        linha = linhas[i].strip()
-        if not linha:
-            i += 1
+    if bold_prefix:
+        r_pre = p.add_run(bold_prefix)
+        r_pre.bold = True
+        r_pre.font.name = "Arial"
+        r_pre.font.size = Pt(font_size)
+
+    pattern = r'(<hl>.*?</hl>|\bXX\b|\bYY\b|\bZZ\b|\bZZZ\b|\bxx-xx\b|\bdia da semana\b)'
+    tokens = re.split(pattern, text, flags=re.IGNORECASE)
+
+    for token in tokens:
+        if not token:
             continue
-            
-        if not forcar_texto and '|' in linha:
-            tabela_linhas = []
-            while i < len(linhas) and '|' in linhas[i]:
-                cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
-                    cels = cels[1:]
-                if len(cels) > 1 and cels[-1] == "":
-                    cels = cels[:-1]
-                if any(c for c in cels):
-                    tabela_linhas.append(cels)
-                i += 1
-                
-            if tabela_linhas:
-                max_cols = max(len(r) for r in tabela_linhas)
-                if max_cols < 2:
-                    for r_data in tabela_linhas:
-                        txt_line = " ".join([c for c in r_data if c])
-                        if txt_line.strip():
-                            p = doc.add_paragraph()
-                            p.paragraph_format.line_spacing = 1.2
-                            p.paragraph_format.space_before = Pt(0)
-                            p.paragraph_format.space_after = Pt(6)
-                            r = p.add_run(txt_line.strip())
-                            r.font.name = "Arial"
-                            r.font.size = Pt(10)
-                else:
-                    for r_data in tabela_linhas:
-                        while len(r_data) < max_cols:
-                            r_data.append("")
+        is_hl = False
+        clean_tok = token
+        if token.lower().startswith("<hl>") and token.lower().endswith("</hl>"):
+            is_hl = True
+            clean_tok = token[4:-5]
+        elif token.upper() in ["XX", "YY", "ZZ", "ZZZ", "XX-XX", "DIA DA SEMANA"]:
+            is_hl = True
 
-                    tbl = doc.add_table(rows=len(tabela_linhas), cols=max_cols)
-                    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
-                    tbl.style = 'Table Grid'
-                    
-                    for r_idx, row_data in enumerate(tabela_linhas):
-                        row_cells = tbl.rows[r_idx].cells
-                        for c_idx, cell_value in enumerate(row_data):
-                            if c_idx < len(row_cells):
-                                cell = row_cells[c_idx]
-                                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
-                                p.paragraph_format.space_before = Pt(3)
-                                p.paragraph_format.space_after = Pt(3)
-                                p.paragraph_format.line_spacing = 1.15
-                                
-                                r = p.add_run(cell_value)
-                                r.font.name = "Arial"
-                                
-                                if r_idx == 0:
-                                    set_cell_bg(cell, "002060")
-                                    r.bold = True
-                                    r.font.size = Pt(9.5)
-                                    r.font.color.rgb = RGBColor(255, 255, 255)
-                                else:
-                                    if r_idx % 2 == 1:
-                                        set_cell_bg(cell, "F8FAFC")
-                                    r.font.size = Pt(9.0)
-                                    r.font.color.rgb = RGBColor(30, 41, 59)
-                    p_sp = doc.add_paragraph()
-                    p_sp.paragraph_format.space_after = Pt(4)
-            continue
-            
-        p = doc.add_paragraph()
-        p.paragraph_format.line_spacing = 1.2
-
-        if eh_titulo_subsecao(linha):
-            p.paragraph_format.space_before = Pt(10)
-            p.paragraph_format.space_after = Pt(4)
-            r = p.add_run(linha)
+        r = p.add_run(clean_tok)
+        r.font.name = "Arial"
+        r.font.size = Pt(font_size)
+        if is_sec_title:
             r.bold = True
-            r.font.name = "Arial"
-            r.font.size = Pt(10.5)
-        else:
-            m_item = re.match(r'^([a-z0-9]{1,3}[\.\)\-]|[A-Z][\.\)\-])\s+(.*)', linha, re.IGNORECASE)
-            if m_item:
-                prefix, rest = m_item.groups()
-                p.paragraph_format.space_before = Pt(3)
-                p.paragraph_format.space_after = Pt(4)
-                
-                r_pre = p.add_run(prefix + " ")
-                r_pre.bold = True
-                r_pre.font.name = "Arial"
-                r_pre.font.size = Pt(10)
-                
-                r_rest = p.add_run(rest)
-                r_rest.font.name = "Arial"
-                r_rest.font.size = Pt(10)
-            else:
-                p.paragraph_format.space_before = Pt(0)
-                p.paragraph_format.space_after = Pt(6)
-                r = p.add_run(linha)
-                r.font.name = "Arial"
-                r.font.size = Pt(10)
-        
-        i += 1
+            r.font.size = Pt(11)
+
+        if is_hl:
+            r.font.highlight_color = WD_COLOR_INDEX.YELLOW
+            r.bold = True
+
+    return p
 
 def gerar_ordem_servico_docx(fields):
     doc = Document()
@@ -1189,14 +954,14 @@ def gerar_ordem_servico_docx(fields):
     table_hdr.autofit = False
     table_hdr.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    row0 = table_hdr.rows[0]
-    cell_left = row0.cells[0]
+    row0 = table_hdr.rows
+    cell_left = row0.cells
     cell_right = row0.cells[1]
 
     cell_left.width = Inches(3.5)
     cell_right.width = Inches(3.0)
 
-    p_left = cell_left.paragraphs[0]
+    p_left = cell_left.paragraphs
     p_left.paragraph_format.space_after = Pt(2)
     p_left.paragraph_format.line_spacing = 1.2
     r_l = p_left.add_run("PMPR\n2º CRPM/18º BPM\nP/3")
@@ -1204,11 +969,11 @@ def gerar_ordem_servico_docx(fields):
     r_l.font.name = "Arial"
     r_l.font.size = Pt(10)
 
-    p_right = cell_right.paragraphs[0]
+    p_right = cell_right.paragraphs
     p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_right.paragraph_format.space_after = Pt(2)
     p_right.paragraph_format.line_spacing = 1.2
-    r_r = p_right.add_run(f"Cornélio Procópio, PR.\nEm {fields.get('data_expedicao', data_atual_extenso())}\nORDEM DE SERVIÇO Nº {fields.get('num_os', '077')}")
+    r_r = p_right.add_run(f"Cornélio Procópio, PR.\nEm {fields.get('data_expedicao', data_atual_extenso())}\nORDEM DE SERVIÇO Nº {fields.get('num_os', '081')}")
     r_r.bold = True
     r_r.font.name = "Arial"
     r_r.font.size = Pt(10)
@@ -1230,29 +995,64 @@ def gerar_ordem_servico_docx(fields):
     r_tit.font.size = Pt(12)
     r_tit.font.color.rgb = RGBColor(0, 32, 96)
 
-    secoes = [
-        ("1. FINALIDADE", fields.get('finalidade', '')),
-        ("2. INFORMAÇÕES GERAIS", fields.get('informacoes_gerais', '')),
-        ("3. MISSÃO", fields.get('missao', '')),
-        ("4. EXECUÇÃO", fields.get('execucao', '')),
-        ("5. ADMINISTRAÇÃO E LOGÍSTICA", fields.get('logistica', '')),
-        ("6. RELATÓRIOS E SISGCOP", fields.get('relatorios', '')),
-        ("7. PRESCRIÇÕES DIVERSAS", fields.get('prescricoes', '')),
-        ("REFERÊNCIAS", fields.get('referencias', ''))
-    ]
+    # 1. FINALIDADE
+    add_p_docx(doc, "1. FINALIDADE", is_sec_title=True)
+    add_p_docx(doc, fields.get('finalidade', 'Regular o planejamento, coordenação, execução e controle da operação no âmbito do 18º BPM.'))
 
-    for tit, conteudo in secoes:
-        p_sec = doc.add_paragraph()
-        p_sec.paragraph_format.space_before = Pt(14)
-        p_sec.paragraph_format.space_after = Pt(4)
-        r_sec = p_sec.add_run(tit)
-        r_sec.bold = True
-        r_sec.font.name = "Arial"
-        r_sec.font.size = Pt(11)
+    # 2. MISSÃO
+    add_p_docx(doc, "2. MISSÃO", is_sec_title=True)
+    add_p_docx(doc, "O 18º Batalhão de Polícia Militar (18º BPM), nos dias XX e YY de ZZ de 2026, intensificará o policiamento ostensivo preventivo e repressivo em toda a sua circunscrição territorial, prioritariamente nas áreas de maior circulação de pessoas e com elevados índices de incidência criminal.", bold_prefix="a) ")
+    add_p_docx(doc, "A ação será desenvolvida mediante patrulhamento ostensivo geral e especializado, abordagens policiais, bloqueios de trânsito e táticos, saturação de área e fiscalizações de veículos, estabelecimentos comerciais e pessoas, direcionando especial esforço às ações de ostensividade e visibilidade — com a execução de Pontos-Base (PBs) sinalizados com cones e viaturas com giroflex acionado —, com a finalidade de prevenir e reprimir infrações penais, elevar a percepção de segurança pública e preservar a ordem pública.", bold_prefix="b) ")
 
-        eh_prescricoes = "PRESCRIÇÕES" in tit.upper()
-        renderizar_conteudo_docx(doc, conteudo, forcar_texto=eh_prescricoes)
+    # 4. EXECUÇÃO
+    add_p_docx(doc, "4. EXECUÇÃO", is_sec_title=True)
+    add_p_docx(doc, "A Operação será executada por meio do esforço concentrado do efetivo operacional e da suplementação do efetivo administrativo do 18º BPM.", bold_prefix="a) ")
+    add_p_docx(doc, "As equipes deverão realizar patrulhamento ostensivo intensificado, Pontos-Base (PBs) em locais estratégicos, saturação de área, abordagens policiais, fiscalização de veículos e estabelecimentos, cumprimento de mandados quando houver, bem como o emprego de equipes ROTAM, ROCAM, Patrulha Rural e Rádio Patrulha.", bold_prefix="b) ")
 
+    # 4.1 ATRIBUIÇÕES
+    add_p_docx(doc, "4.1 ATRIBUIÇÕES:", is_sec_title=True)
+    add_p_docx(doc, "Escalar o efetivo administrativo empenhado na operação, controlar o banco de horas e gerenciar os registros de alteração de pessoal.", bold_prefix="A P1 da OPM: ")
+    add_p_docx(doc, "Definir os cartões-programa, locais de Pontos-Base (PBs) com base no mapa do crime/hotspots, elaborar a escala de serviço e confeccionar a presente Ordem de Serviço.", bold_prefix="A P3 da OPM: ")
+    add_p_docx(doc, "Realizar o levantamento prévio de informações sobre áreas sensíveis e alvos prioritários, alimentando as equipes ostensivas nas fases pré e operacional.", bold_prefix="A ALI da OPM: ")
+    add_p_docx(doc, "Acompanhar o lançamento da operação, registrar fotos/vídeos das ações policiais, produzir matérias de pauta positiva e encaminhar ao 2º CRPM/PM5.", bold_prefix="a P5 da OPM: ")
+    add_p_docx(doc, "Promover a preleção da tropa antes do início do serviço, orientar quanto aos procedimentos operacionais e fiscalizar a atuação das equipes.", bold_prefix="Ao PCS: ")
+    add_p_docx(doc, "Cumprir rigorosamente os horários e locais estabelecidos nos cartões-programa em suas respectivas sedes e frações destacadas.", bold_prefix="As Companhias: ")
+
+    # 4.2. DATA/HORA/LOCAL
+    add_p_docx(doc, "4.2. DATA/HORA/LOCAL", is_sec_title=True)
+    add_p_docx(doc, "A operação será executada nos dias estipulados no planejamento, com concentração da tropa com 30 minutos de antecedência no local de lançamento.", bold_prefix="a) ")
+    add_p_docx(doc, "O lançamento ocorrerá em pontos estratégicos de alta visibilidade pública definidos pelo Comando da Unidade e das Companhias.", bold_prefix="b) ")
+    add_p_docx(doc, "Dia XX de YY (xx-xx), Fase Única.", bold_prefix="4.2.2. ")
+
+    # 4.3 EFETIVO
+    add_p_docx(doc, "4.3 EFETIVO", is_sec_title=True)
+    add_p_docx(doc, "Deverá ser empregado o efetivo ordinário, especializado e suplementar (administrativo), mantendo o expediente mínimo essencial na gestão da OPM com alternância das equipes entre os dias de aplicação.")
+
+    # 5. COMANDO E CONTROLE
+    add_p_docx(doc, "5. COMANDO E CONTROLE", is_sec_title=True)
+    add_p_docx(doc, "5.1. A coordenação geral é do Comandante do 18º BPM, com coordenação tática dos Comandantes de Cia, CPU e Adjunto.")
+    add_p_docx(doc, "DIA XX yy : dia da semana, CIDADE: ZZZ", bold_prefix="a) ")
+    add_p_docx(doc, "DIA XX yy : dia da semana, CIDADE: ZZZ", bold_prefix="b) ")
+
+    # 6. ADMINISTRAÇÃO/LOGÍSTICA
+    add_p_docx(doc, "6. ADMINISTRAÇÃO/LOGÍSTICA", is_sec_title=True)
+    add_p_docx(doc, "Apresentação da tropa em local e horário determinados, com controle de presença e conferência de materiais.", bold_prefix="6.1 PESSOA: ")
+    add_p_docx(doc, "A cargo da P/4 das respectivas OPMs, utilizando as viaturas operacionais caracterizadas com giroflex acionado.", bold_prefix="6.2 TRANSPORTES: ")
+    add_p_docx(doc, "Uniforme orgânico da OPM (4º RUPM), cinto de guarnição completo, colete balístico, rádio HT e armamento portátil disponível.", bold_prefix="6.3 UNIFORME, EQUIPAMENTOS E ARMAMENTO: ")
+    add_p_docx(doc, "Registro de imagem e imprensa a cargo da P/5 da OPM.", bold_prefix="6.4 COMUNICAÇÃO SOCIAL: ")
+
+    # 7. RELATÓRIO
+    add_p_docx(doc, "7. RELATÓRIO", is_sec_title=True)
+    num_sisg = fields.get('num_sisgcop', '63.447')
+    add_p_docx(doc, f"Deverá ser feito o registro no SISGCOP até às 08h30min do dia subsequente da Operação. O Relatório deverá ser vinculado à Operação nº {num_sisg} - “{fields.get('nome_operacao', '').strip().upper()}”. Fica proibida a criação de cadastros paralelos com o mesmo nome.")
+
+    # 8. PRESCRIÇÕES DIVERSAS
+    add_p_docx(doc, "8. PRESCRIÇÕES DIVERSAS", is_sec_title=True)
+    add_p_docx(doc, "a) As OPMs deverão realizar contato com as Especializadas visando à realização de ações integradas e conjuntas durante o período de execução da Operação.")
+    add_p_docx(doc, "b) As viaturas não empenhadas em ações de trânsito deverão realizar patrulhamento ostensivo e Pontos de Bloqueio (PBs), priorizando a utilização de cones e giroflex acionado.")
+    add_p_docx(doc, "c) Os casos omissos deverão ser resolvidos junto ao CPU e Comandante da Operação.")
+
+    # Assinatura
     p_ass = doc.add_paragraph()
     p_ass.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_ass.paragraph_format.space_before = Pt(28)
@@ -1278,84 +1078,14 @@ def gerar_ordem_servico_docx(fields):
     buffer.seek(0)
     return buffer.getvalue()
 
-def renderizar_conteudo_pdf(story, conteudo, style_subnum, style_body, style_table_hdr, forcar_texto=False):
-    conteudo_formatado = formatar_quebras_de_secao(conteudo)
-    if not conteudo_formatado or not conteudo_formatado.strip():
-        return
-    if forcar_texto:
-        conteudo_formatado = conteudo_formatado.replace('|', ' ')
-
-    linhas = conteudo_formatado.strip().split('\n')
-    i = 0
-    while i < len(linhas):
-        linha = linhas[i].strip()
-        if not linha:
-            i += 1
-            continue
-            
-        if not forcar_texto and '|' in linha:
-            tabela_linhas = []
-            while i < len(linhas) and '|' in linhas[i]:
-                cels = [c.strip() for c in linhas[i].split('|')]
-                if len(cels) > 1 and cels[0] == "":
-                    cels = cels[1:]
-                if len(cels) > 1 and cels[-1] == "":
-                    cels = cels[:-1]
-                if any(c for c in cels):
-                    tabela_linhas.append(cels)
-                i += 1
-                
-            if tabela_linhas:
-                max_cols = max(len(r) for r in tabela_linhas)
-                if max_cols < 2:
-                    for r_data in tabela_linhas:
-                        txt_line = " ".join([c for c in r_data if c])
-                        if txt_line.strip():
-                            story.append(Paragraph(txt_line.strip().replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'), style_body))
-                else:
-                    col_w = (6.4 * inch) / max_cols
-                    
-                    pdf_table_data = []
-                    for r_idx, r_data in enumerate(tabela_linhas):
-                        row_p = []
-                        for c_val in r_data:
-                            c_clean = c_val.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                            if r_idx == 0:
-                                p_cell = Paragraph(f"<b><font color='white'>{c_clean}</font></b>", style_table_hdr)
-                            else:
-                                p_cell = Paragraph(c_clean, style_body)
-                            row_p.append(p_cell)
-                        pdf_table_data.append(row_p)
-                    
-                    tbl = Table(pdf_table_data, colWidths=[col_w]*max_cols)
-                    tbl.setStyle(TableStyle([
-                        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#002060')),
-                        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#A0AAB5')),
-                        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                        ('TOPPADDING', (0,0), (-1,-1), 4),
-                        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-                        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#F8FAFC')])
-                    ]))
-                    story.append(Spacer(1, 4))
-                    story.append(tbl)
-                    story.append(Spacer(1, 6))
-            continue
-            
-        l_clean = linha.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
-        if eh_titulo_subsecao(linha):
-            story.append(Paragraph(f"<b>{l_clean}</b>", style_subnum))
-        else:
-            m_item = re.match(r'^([a-z0-9]{1,3}[\.\)\-]|[A-Z][\.\)\-])\s+(.*)', linha, re.IGNORECASE)
-            if m_item:
-                prefix, rest = m_item.groups()
-                p_pre = prefix.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                p_rest = rest.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                story.append(Paragraph(f"<b>{p_pre}</b> {p_rest}", style_body))
-            else:
-                story.append(Paragraph(l_clean, style_body))
-            
-        i += 1
+def text_to_pdf_html(text):
+    clean = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    clean = clean.replace('&lt;hl&gt;', '<font backcolor="yellow"><b>').replace('&lt;/hl&gt;', '</b></font>')
+    pattern = r'(\bXX\b|\bYY\b|\bZZ\b|\bZZZ\b|\bxx-xx\b|\bdia da semana\b)'
+    def repl(m):
+        return f'<font backcolor="yellow"><b>{m.group(1)}</b></font>'
+    clean = re.sub(pattern, repl, clean, flags=re.IGNORECASE)
+    return clean
 
 def gerar_ordem_servico_pdf(fields):
     buffer = io.BytesIO()
@@ -1373,10 +1103,8 @@ def gerar_ordem_servico_pdf(fields):
     style_hdr_left = ParagraphStyle('HdrLeft', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=colors.black)
     style_hdr_right = ParagraphStyle('HdrRight', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=13, alignment=2, textColor=colors.black)
     style_title = ParagraphStyle('OpTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=16, alignment=1, textColor=colors.HexColor('#002060'))
-    style_sec_title = ParagraphStyle('SecTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, leading=15, textColor=colors.black, spaceBefore=14, spaceAfter=4)
-    style_subnum_title = ParagraphStyle('SubNumTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10.5, leading=14, textColor=colors.black, spaceBefore=10, spaceAfter=4)
+    style_sec_title = ParagraphStyle('SecTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, leading=15, textColor=colors.black, spaceBefore=12, spaceAfter=4)
     style_body = ParagraphStyle('BodyTextCustom', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=14, textColor=colors.black, spaceAfter=5)
-    style_table_hdr = ParagraphStyle('TableHdrCustom', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=colors.white)
 
     style_ass_small = ParagraphStyle('AssinaturaSmall', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=8.5, leading=11, alignment=1, textColor=colors.black)
     style_ass = ParagraphStyle('Assinatura', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=14, alignment=1, textColor=colors.black)
@@ -1384,7 +1112,7 @@ def gerar_ordem_servico_pdf(fields):
     story = []
 
     left_p = Paragraph("PMPR<br/>2º CRPM/18º BPM<br/>P/3", style_hdr_left)
-    right_p = Paragraph(f"Cornélio Procópio, PR.<br/>Em {fields.get('data_expedicao', '')}<br/><b>ORDEM DE SERVIÇO Nº {fields.get('num_os', '077')}</b>", style_hdr_right)
+    right_p = Paragraph(f"Cornélio Procópio, PR.<br/>Em {fields.get('data_expedicao', data_atual_extenso())}<br/><b>ORDEM DE SERVIÇO Nº {fields.get('num_os', '081')}</b>", style_hdr_right)
 
     tbl_hdr = Table([[left_p, right_p]], colWidths=[3.2*inch, 3.2*inch])
     tbl_hdr.setStyle(TableStyle([
@@ -1403,21 +1131,62 @@ def gerar_ordem_servico_pdf(fields):
     story.append(Paragraph(f"“{op_name}”", style_title))
     story.append(Spacer(1, 10))
 
-    secoes = [
-        ("1. FINALIDADE", fields.get('finalidade', '')),
-        ("2. INFORMAÇÕES GERAIS", fields.get('informacoes_gerais', '')),
-        ("3. MISSÃO", fields.get('missao', '')),
-        ("4. EXECUÇÃO", fields.get('execucao', '')),
-        ("5. ADMINISTRAÇÃO E LOGÍSTICA", fields.get('logistica', '')),
-        ("6. RELATÓRIOS E SISGCOP", fields.get('relatorios', '')),
-        ("7. PRESCRIÇÕES DIVERSAS", fields.get('prescricoes', '')),
-        ("REFERÊNCIAS", fields.get('referencias', ''))
-    ]
+    # 1. FINALIDADE
+    story.append(Paragraph("1. FINALIDADE", style_sec_title))
+    story.append(Paragraph(text_to_pdf_html(fields.get('finalidade', '')), style_body))
 
-    for tit, conteudo in secoes:
-        story.append(Paragraph(tit, style_sec_title))
-        eh_prescricoes = "PRESCRIÇÕES" in tit.upper()
-        renderizar_conteudo_pdf(story, conteudo, style_subnum_title, style_body, style_table_hdr, forcar_texto=eh_prescricoes)
+    # 2. MISSÃO
+    story.append(Paragraph("2. MISSÃO", style_sec_title))
+    story.append(Paragraph(text_to_pdf_html("<b>a)</b> O 18º Batalhão de Polícia Militar (18º BPM), nos dias XX e YY de ZZ de 2026, intensificará o policiamento ostensivo preventivo e repressivo em toda a sua circunscrição territorial, prioritariamente nas áreas de maior circulação de pessoas e com elevados índices de incidência criminal."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>b)</b> A ação será desenvolvida mediante patrulhamento ostensivo geral e especializado, abordagens policiais, bloqueios de trânsito e táticos, saturação de área e fiscalizações de veículos, estabelecimentos comerciais e pessoas, direcionando especial esforço às ações de ostensividade e visibilidade — com a execução de Pontos-Base (PBs) sinalizados com cones e viaturas com giroflex acionado —, com a finalidade de prevenir e reprimir infrações penais, elevar a percepção de segurança pública e preservar a ordem pública."), style_body))
+
+    # 4. EXECUÇÃO
+    story.append(Paragraph("4. EXECUÇÃO", style_sec_title))
+    story.append(Paragraph(text_to_pdf_html("<b>a)</b> A Operação será executada por meio do esforço concentrado do efetivo operacional e da suplementação do efetivo administrativo do 18º BPM."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>b)</b> As equipes deverão realizar patrulhamento ostensivo intensificado, Pontos-Base (PBs) em locais estratégicos, saturação de área, abordagens policiais, fiscalização de veículos e estabelecimentos, cumprimento de mandados quando houver, bem como o emprego de equipes ROTAM, ROCAM, Patrulha Rural e Rádio Patrulha."), style_body))
+
+    # 4.1 ATRIBUIÇÕES
+    story.append(Paragraph("4.1 ATRIBUIÇÕES:", style_sec_title))
+    story.append(Paragraph(text_to_pdf_html("<b>A P1 da OPM:</b> Escalar o efetivo administrativo empenhado na operação, controlar o banco de horas e gerenciar os registros de alteração de pessoal."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>A P3 da OPM:</b> Definir os cartões-programa, locais de Pontos-Base (PBs) com base no mapa do crime/hotspots, elaborar a escala de serviço e confeccionar a presente Ordem de Serviço."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>A ALI da OPM:</b> Realizar o levantamento prévio de informações sobre áreas sensíveis e alvos prioritários, alimentando as equipes ostensivas nas fases pré e operacional."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>a P5 da OPM:</b> Acompanhar o lançamento da operação, registrar fotos/vídeos das ações policiais, produzir matérias de pauta positiva e encaminhar ao 2º CRPM/PM5."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>Ao PCS:</b> Promover a preleção da tropa antes do início do serviço, orientar quanto aos procedimentos operacionais e fiscalizar a atuação das equipes."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>As Companhias:</b> Cumprir rigorosamente os horários e locais estabelecidos nos cartões-programa em suas respectivas sedes e frações destacadas."), style_body))
+
+    # 4.2 DATA/HORA/LOCAL
+    story.append(Paragraph("4.2 DATA/HORA/LOCAL", style_sec_title))
+    story.append(Paragraph(text_to_pdf_html("<b>a)</b> A operação será executada nos dias estipulados no planejamento, com concentração da tropa com 30 minutos de antecedência no local de lançamento."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>b)</b> O lançamento ocorrerá em pontos estratégicos de alta visibilidade pública definidos pelo Comando da Unidade e das Companhias."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>4.2.2.</b> Dia XX de YY (xx-xx), Fase Única."), style_body))
+
+    # 4.3 EFETIVO
+    story.append(Paragraph("4.3 EFETIVO", style_sec_title))
+    story.append(Paragraph(text_to_pdf_html("Deverá ser empregado o efetivo ordinário, especializado e suplementar (administrativo), mantendo o expediente mínimo essencial na gestão da OPM com alternância das equipes entre os dias de aplicação."), style_body))
+
+    # 5. COMANDO E CONTROLE
+    story.append(Paragraph("5. COMANDO E CONTROLE", style_sec_title))
+    story.append(Paragraph(text_to_pdf_html("<b>5.1</b> A coordenação geral é do Comandante do 18º BPM, com coordenação tática dos Comandantes de Cia, CPU e Adjunto."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>a)</b> DIA XX yy : dia da semana, CIDADE: ZZZ"), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>b)</b> DIA XX yy : dia da semana, CIDADE: ZZZ"), style_body))
+
+    # 6. ADMINISTRAÇÃO/LOGÍSTICA
+    story.append(Paragraph("6. ADMINISTRAÇÃO/LOGÍSTICA", style_sec_title))
+    story.append(Paragraph(text_to_pdf_html("<b>6.1 PESSOA:</b> Apresentação da tropa em local e horário determinados, com controle de presença e conferência de materiais."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>6.2 TRANSPORTES:</b> A cargo da P/4 das respectivas OPMs, utilizando as viaturas operacionais caracterizadas com giroflex acionado."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>6.3 UNIFORME, EQUIPAMENTOS E ARMAMENTO:</b> Uniforme orgânico da OPM (4º RUPM), cinto de guarnição completo, colete balístico, rádio HT e armamento portátil disponível."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>6.4 COMUNICAÇÃO SOCIAL:</b> Registro de imagem e imprensa a cargo da P/5 da OPM."), style_body))
+
+    # 7. RELATÓRIO
+    story.append(Paragraph("7. RELATÓRIO", style_sec_title))
+    num_sisg = fields.get('num_sisgcop', '63.447')
+    story.append(Paragraph(text_to_pdf_html(f"Deverá ser feito o registro no SISGCOP até às 08h30min do dia subsequente da Operação. O Relatório deverá ser vinculado à Operação nº {num_sisg} - “{fields.get('nome_operacao', '').strip().upper()}”. Fica proibida a criação de cadastros paralelos com o mesmo nome."), style_body))
+
+    # 8. PRESCRIÇÕES DIVERSAS
+    story.append(Paragraph("8. PRESCRIÇÕES DIVERSAS", style_sec_title))
+    story.append(Paragraph(text_to_pdf_html("<b>a)</b> As OPMs deverão realizar contato com as Especializadas visando à realização de ações integradas e conjuntas durante o período de execução da Operação."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>b)</b> As viaturas não empenhadas em ações de trânsito deverão realizar patrulhamento ostensivo e Pontos de Bloqueio (PBs), priorizando a utilização de cones e giroflex acionado."), style_body))
+    story.append(Paragraph(text_to_pdf_html("<b>c)</b> Os casos omissos deverão ser resolvidos junto ao CPU e Comandante da Operação."), style_body))
 
     story.append(Spacer(1, 20))
     story.append(Paragraph("<i>(assinado eletronicamente)</i>", style_ass_small))
@@ -1457,11 +1226,11 @@ def render_ordem_servico():
 
             col_a, col_b = st.columns(2)
             with col_a:
-                num_os = st.text_input("Número da Ordem de Serviço (OS)", value="077")
-                num_oo = st.text_input("Ordem de Operação de Origem", value=parsed_data.get('num_oo', '000/2026'))
+                num_os = st.text_input("Número da Ordem de Serviço (OS)", value="081")
+                num_oo = st.text_input("Ordem de Operação de Origem", value=parsed_data.get('num_oo', '046/2026'))
             with col_b:
                 data_expedicao = st.text_input("Data de Expedição da OS", value=data_atual_extenso())
-                nome_operacao = st.text_input("Nome da Operação", value=parsed_data.get('nome_op', 'OPERAÇÃO POLICIAL'))
+                nome_operacao = st.text_input("Nome da Operação", value=parsed_data.get('nome_op', 'OPERAÇÃO OMNIS - OUTUBRO'))
 
             col_c, col_d = st.columns(2)
             with col_c:
@@ -1478,13 +1247,7 @@ def render_ordem_servico():
                     'data_expedicao': data_expedicao,
                     'nome_operacao': nome_operacao,
                     'finalidade': parsed_data.get('finalidade', ''),
-                    'informacoes_gerais': parsed_data.get('informacoes_gerais', ''),
-                    'missao': parsed_data.get('missao', ''),
-                    'execucao': parsed_data.get('execucao', ''),
-                    'logistica': parsed_data.get('logistica', ''),
-                    'relatorios': parsed_data.get('relatorios', ''),
-                    'prescricoes': parsed_data.get('prescricoes', ''),
-                    'referencias': parsed_data.get('referencias', ''),
+                    'num_sisgcop': parsed_data.get('num_sisgcop', '63.447'),
                     'nome_comandante': nome_comandante,
                     'cargo_comandante': cargo_comandante
                 }
